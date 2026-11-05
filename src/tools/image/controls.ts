@@ -5,5 +5,5 @@ export interface ImageControls {
  preview: {width?:number;height?:number;sourceWidth?:number;sourceHeight?:number}|null;
  originalDimensions: RefObject<{width:number;height:number}|null>;
  ratio:string; setRatio:(value:string)=>void; setCropRatio:(value:string)=>void;
- file:LocalFile; format:string;
+ file:LocalFile; format:string; outputFormats:string[]; onFormatChange:(format:string)=>void;
 }

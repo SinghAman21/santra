@@ -2,7 +2,6 @@ import './image-tool-window.css';
 import Crop from './Crop';
 import Resize from './Resize';
 import Rotate from './Rotate';
-import Flip from './Flip';
 import Background from './Background';
 import Adjust from './Adjust';
 import Compress from './Compress';
@@ -20,7 +19,7 @@ type Props = {
   format: string;
   initialOptions: Record<string, string>;
   onClose: () => void;
-  onApply: (options: Record<string, string>) => void | Promise<void>;
+  onApply: (format: string, options: Record<string, string>) => void | Promise<void>;
 };
 
 const labels: Record<string, string> = {
@@ -38,6 +37,8 @@ export default function ImageToolWindow({ capability, file, format, initialOptio
   closeRef.current = onClose;
   const operation = capability.operation || capability.id.split(':').pop() || '';
   const [values, setValues] = useState<Record<string, string>>(() => ({ quality: '85', brightness: '1', saturation: '1', contrast: '1', width: '', height: '', x: '0', y: '0', angle: operation === 'rotate' ? '90' : '0', direction: 'horizontal', backgroundType: 'solid', backgroundColor: '#ffffff', backgroundColor2: '#ff5a00', padding: operation === 'background' ? '32' : '0', fit: operation === 'background' ? 'contain' : 'inside', stripMetadata: 'false', flipHorizontal: 'false', flipVertical: 'false', title: '', artist: '', copyright: '', description: '', dateTime: '', ...initialOptions }));
+  const [selectedFormat, setSelectedFormat] = useState(format);
+  const [changed, setChanged] = useState(false);
   const [preview, setPreview] = useState<{ url: string; width?: number; height?: number; sourceWidth?: number; sourceHeight?: number } | null>(null);
   const originalDimensions = useRef<{ width: number; height: number } | null>(null);
   const [previewError, setPreviewError] = useState('');
@@ -49,7 +50,10 @@ export default function ImageToolWindow({ capability, file, format, initialOptio
   const [ratio, setRatio] = useState('Free');
   const [previewBounds, setPreviewBounds] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const title = labels[operation] || capability.label;
-  const set = (key: string, value: string) => setValues(previous => ({ ...previous, [key]: value }));
+  const set = (key: string, value: string) => setValues(previous => {
+    if (previous[key] !== value) setChanged(true);
+    return { ...previous, [key]: value };
+  });
   const recipe = useMemo(() => Object.fromEntries(Object.entries(values).filter(([, value]) => value !== '')), [values]);
   const previewRecipe = useMemo<Record<string, string>>(() => operation === 'metadata' ? {} : recipe, [operation, recipe]);
 
@@ -184,25 +188,27 @@ export default function ImageToolWindow({ capability, file, format, initialOptio
       if (drag.handle?.includes('s')) height = Math.max(1, Math.min(dimensions.height - drag.y, drag.height + dy));
     }
     setValues(previous => ({ ...previous, x: String(Math.round(x)), y: String(Math.round(y)), width: String(Math.round(width)), height: String(Math.round(height)) }));
+    setChanged(true);
     setRatio('Free');
   }
 
-  const controls = { values, set, preview, originalDimensions, ratio, setRatio, setCropRatio, file, format };
+  const controls = { values, set, preview, originalDimensions, ratio, setRatio, setCropRatio, file, format: selectedFormat, outputFormats: capability.outputs, onFormatChange: (next: string) => { if (next !== selectedFormat) setChanged(true); setSelectedFormat(next); } };
 
   const sourceDimensions = originalDimensions.current;
-  const outputName = `New ${format.toUpperCase()} copy · ${file.name}`;
-  const notice = applyError || capability.warning || (!capability.preservesMetadata ? 'Metadata is removed by the current raster processor.' : operation === 'metadata' ? 'Only supported EXIF fields are written. Technical tags may be regenerated.' : 'Your original image is preserved.');
+  const outputName = `New ${selectedFormat.toUpperCase()} copy · ${file.name}`;
+  // Processor limits belong to capability/error states, not every editor panel.
+  const notice = applyError;
 
   return <div className="image-tool-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={windowRef} className="image-tool-window" role="dialog" aria-modal="true" aria-label={title}>
       <header className="image-tool-header"><div><h2>{title}</h2><p title={file.name}>{file.name}{sourceDimensions ? ` · ${sourceDimensions.width} × ${sourceDimensions.height}` : ''} · {(file.size / 1024 / 1024).toFixed(2)} MB</p></div><button className="image-tool-close" aria-label="Close editor" disabled={applying} onClick={onClose}><X size={17}/></button></header>
       <div className="image-tool-body">
         <div className="image-tool-preview-column"><span className="image-tool-preview-label">Local preview</span>
-        <div className="image-tool-preview-wrap" ref={previewWrapRef} style={operation === 'background' && values.backgroundType === 'solid' ? { backgroundImage: 'none', backgroundColor: values.backgroundColor } : operation === 'background' && values.backgroundType === 'gradient' ? { backgroundImage: `linear-gradient(135deg, ${values.backgroundColor}, ${values.backgroundColor2})` } : undefined}>
+        <div className="image-tool-preview-wrap" ref={previewWrapRef} style={operation === 'background' && values.backgroundType !== 'image' ? { backgroundImage: 'none', backgroundColor: values.backgroundColor } : undefined}>
           {preview?.url ? <img ref={previewImageRef} className="image-tool-preview" style={{ '--image-zoom': zoom, '--image-pan-x': `${pan.x}px`, '--image-pan-y': `${pan.y}px` } as CSSProperties} src={preview.url} alt={`Local preview of ${file.name}`}/> : <div className="image-tool-preview-empty"><span>{busy ? 'Updating preview…' : 'Local preview'}</span>{previewError && <small>{previewError}</small>}</div>}
           {operation === 'crop' && preview?.url && originalDimensions.current && previewBounds.width > 0 && <div className="image-tool-crop-overlay" role="group" aria-label="Crop selection" style={{ left: previewBounds.left, top: previewBounds.top, width: previewBounds.width, height: previewBounds.height }} onPointerDown={beginCrop} onPointerMove={moveCrop} onPointerUp={() => { cropDragRef.current = null; }} onPointerCancel={() => { cropDragRef.current = null; }}>
-            <div className="image-tool-crop-selection" style={{ left: `${(Number(values.x) || 0) / originalDimensions.current.width * 100}%`, top: `${(Number(values.y) || 0) / originalDimensions.current.height * 100}%`, width: `${(Number(values.width) || originalDimensions.current.width) / originalDimensions.current.width * 100}%`, height: `${(Number(values.height) || originalDimensions.current.height) / originalDimensions.current.height * 100}%` }}>
-              {['nw', 'ne', 'sw', 'se'].map(handle => <span key={handle} data-crop-handle={handle} className={`crop-handle ${handle}`} aria-hidden="true"/>)}
+            <div tabIndex={0} className="image-tool-crop-selection" aria-label="Crop frame. Use arrow keys to nudge." onKeyDown={event => { const nudge = event.shiftKey ? 10 : 1; if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return; event.preventDefault(); const dx = event.key === 'ArrowLeft' ? -nudge : event.key === 'ArrowRight' ? nudge : 0; const dy = event.key === 'ArrowUp' ? -nudge : event.key === 'ArrowDown' ? nudge : 0; const width = Number(values.width) || originalDimensions.current!.width; const height = Number(values.height) || originalDimensions.current!.height; setValues(previous => ({ ...previous, x: String(Math.max(0, Math.min(originalDimensions.current!.width - width, (Number(previous.x) || 0) + dx))), y: String(Math.max(0, Math.min(originalDimensions.current!.height - height, (Number(previous.y) || 0) + dy))) })); setChanged(true); }} style={{ left: `${(Number(values.x) || 0) / originalDimensions.current.width * 100}%`, top: `${(Number(values.y) || 0) / originalDimensions.current.height * 100}%`, width: `${(Number(values.width) || originalDimensions.current.width) / originalDimensions.current.width * 100}%`, height: `${(Number(values.height) || originalDimensions.current.height) / originalDimensions.current.height * 100}%` }}>
+              {['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(handle => <span key={handle} data-crop-handle={handle} className={`crop-handle ${handle}`} aria-hidden="true"/>)}
             </div>
           </div>}
           {preview?.sourceWidth && preview.sourceHeight && <span className="image-tool-dimensions">{preview.sourceWidth} × {preview.sourceHeight} px</span>}
@@ -214,7 +220,6 @@ export default function ImageToolWindow({ capability, file, format, initialOptio
           {operation === 'crop' && <Crop {...controls}/>}
           {operation === 'resize' && <Resize {...controls}/>}
           {operation === 'rotate' && <Rotate {...controls}/>}
-          {operation === 'flip' && <Flip {...controls}/>}
           {operation === 'background' && <Background {...controls}/>}
           {operation === 'edit-image' && <Adjust {...controls}/>}
           {operation === 'compress' && <Compress {...controls}/>}
@@ -223,8 +228,8 @@ export default function ImageToolWindow({ capability, file, format, initialOptio
           {capability.preservesMetadata && operation !== 'metadata' && <label className="image-tool-check"><input type="checkbox" checked={values.stripMetadata === 'true'} onChange={event => set('stripMetadata', String(event.target.checked))}/> {capability.preservesMetadata ? 'Remove metadata from the copy' : 'This local image backend removes metadata from the copy'}</label>}
         </div>
       </div>
-      <div className={`image-tool-notice ${applyError ? 'has-error' : ''}`} role={applyError ? 'alert' : 'status'}>{notice}</div>
-      <footer className="image-tool-footer"><div className="image-tool-output"><strong>{outputName}</strong><span>New copy · configured destination · collision-safe</span></div><div className="image-tool-footer-actions"><button className="image-tool-reset" disabled={applying} onClick={() => { setRatio('Free'); setZoom(1); setPan({ x: 0, y: 0 }); setApplyError(''); const padding = operation === 'background' ? 32 : 0; setValues({ quality: '85', brightness: '1', saturation: '1', contrast: '1', width: operation === 'background' ? String((originalDimensions.current?.width || 0) + padding * 2) : '', height: operation === 'background' ? String((originalDimensions.current?.height || 0) + padding * 2) : '', x: '0', y: '0', angle: operation === 'rotate' ? '90' : '0', direction: 'horizontal', backgroundType: 'solid', backgroundColor: '#ffffff', backgroundColor2: '#ff5a00', padding: String(padding), fit: operation === 'background' ? 'contain' : 'inside', stripMetadata: 'false', flipHorizontal: 'false', flipVertical: 'false', title: '', artist: '', copyright: '', description: '', dateTime: '' }); }}>Reset</button><button className="editor-cancel" disabled={applying} onClick={onClose}>Cancel</button><button className="image-tool-apply" disabled={applying} onClick={async () => { setApplying(true); setApplyError(''); try { await onApply(values); } catch (error) { setApplyError(error instanceof Error ? error.message : String(error)); } finally { setApplying(false); } }}>{applying ? <RotateCw className="spin" size={16}/> : <Check size={16}/>} {applying ? 'Queueing…' : 'Save new copy'}</button></div></footer>
+      {notice && <div className={`image-tool-notice ${applyError ? 'has-error' : ''}`} role={applyError ? 'alert' : 'status'}>{notice}</div>}
+      <footer className="image-tool-footer"><div className="image-tool-output"><strong>{outputName}</strong><span>New copy · configured destination · collision-safe</span></div><div className="image-tool-footer-actions"><button className="image-tool-reset" disabled={applying || !changed} onClick={() => { setRatio('Free'); setZoom(1); setPan({ x: 0, y: 0 }); setApplyError(''); setSelectedFormat(format); const padding = operation === 'background' ? 32 : 0; setValues({ quality: '85', brightness: '1', saturation: '1', contrast: '1', width: operation === 'background' ? String((originalDimensions.current?.width || 0) + padding * 2) : '', height: operation === 'background' ? String((originalDimensions.current?.height || 0) + padding * 2) : '', x: '0', y: '0', angle: operation === 'rotate' ? '90' : '0', direction: 'horizontal', backgroundType: 'solid', backgroundColor: '#ffffff', backgroundColor2: '#ff5a00', padding: String(padding), fit: operation === 'background' ? 'contain' : 'inside', stripMetadata: 'false', flipHorizontal: 'false', flipVertical: 'false', title: '', artist: '', copyright: '', description: '', dateTime: '' }); setChanged(false); }}>Reset</button><button className="editor-cancel" disabled={applying} onClick={onClose}>Cancel</button><button className="image-tool-apply" disabled={applying} onClick={async () => { setApplying(true); setApplyError(''); try { await onApply(selectedFormat, values); } catch (error) { setApplyError(error instanceof Error ? error.message : String(error)); } finally { setApplying(false); } }}>{applying ? <RotateCw className="spin" size={16}/> : <Check size={16}/>} {applying ? 'Queueing…' : 'Save new copy'}</button></div></footer>
     </section>
   </div>;
 }

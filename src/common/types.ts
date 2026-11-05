@@ -29,7 +29,7 @@ export interface Bridge {
   openImageTool?(request: { capabilityId: string; files: string[]; format: string; options: Record<string, string> }): Promise<unknown>;
   imageToolContext?(): Promise<ImageEditorContext>;
   onImageToolContext?(callback: (context: ImageEditorContext) => void): () => void;
-  applyImageTool?(request: { options: Record<string, string> }): Promise<unknown>;
+  applyImageTool?(request: { format?: string; options: Record<string, string> }): Promise<unknown>;
   closeImageTool?(): Promise<unknown>;
   videoToolContext?(): Promise<VideoEditorContext>;
   onVideoToolContext?(callback: (context: VideoEditorContext) => void): () => void;

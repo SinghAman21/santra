@@ -16,7 +16,6 @@ const sampleFiles: Record<string, string> = {
   documents: 'draft.md',
   subtitles: 'captions.srt',
   archives: 'project.txt',
-  presentations: 'deck.pptx',
   spreadsheets: 'quarter.xlsx',
 };
 const formatExtensions: Record<string, string> = { JPG: 'jpg', Markdown: 'md', WebP: 'webp', Opus: 'opus', 'Extract archive': 'folder' };

@@ -4,7 +4,7 @@ The `tauri-rt` branch has Tauri as its sole desktop runtime. The React/Vite work
 
 | Area | Current code | Remaining acceptance work |
 | --- | --- | --- |
-| Images | Rust raster conversion, preview, orientation, crop, resize, rotate, flip, adjustments, compression, background canvas, metadata removal, preview panning at normal zoom; optional ExifTool JPEG metadata copy | Verify format/codec matrix, metadata preservation and animated inputs against the previous release; improve missing cases before declaring parity |
+| Images | Capability-gated Rust raster conversion plus local preview/editor surfaces for crop, resize, rotate with flip controls, adjustments, compression, canvas backgrounds, and metadata tools; optional ExifTool JPEG metadata copy | Verify format/codec matrix, metadata preservation and animated inputs against the previous release; manually validate local background-image selection and output handling before declaring parity |
 | Subtitles and archives | Local SRT/VTT conversion; bounded ZIP/TAR/GZIP create/extract with path and link checks | Malformed input corpus, cancellation, and platform file-manager workflows |
 | Audio/video | Detected FFmpeg routes for conversion, trim, split, ordered merge, visualization, waveform preview, 30-second video editor preview, GIF/frame export, redaction, and other editor operations | Per-codec results, full-length visual seeking, metadata, playback, cancellation, and actual local output checks on both operating systems |
 | PDF/documents | Detected Poppler, qpdf, Pandoc, and LibreOffice routes | Optional-tool fixtures, fidelity and safety review; absent tools stay hidden |

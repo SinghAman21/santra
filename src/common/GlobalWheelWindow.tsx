@@ -85,7 +85,8 @@ export default function GlobalWheelWindow() {
     const cancel = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        void api.finishGlobalWheel?.('converter');
+        // The global overlay is disposable; Escape must never surface the workspace.
+        void api.finishGlobalWheel?.('background');
       }
     };
     window.addEventListener('keydown', cancel);
@@ -144,7 +145,7 @@ export default function GlobalWheelWindow() {
         const action = selectedChoice;
         const result = await performFileAction({ action, files: incoming }) as { ok?: boolean; canceled?: boolean; reason?: string };
         if (result?.ok === false) throw new Error(result.reason || 'The file action could not be completed.');
-        await api.finishGlobalWheel?.('converter', result?.canceled ? 'File action canceled.' : action === 'copy-path' ? 'Paths copied to clipboard.' : 'File action completed.');
+        await api.finishGlobalWheel?.('background');
         return;
       }
       const [capabilityId, format] = selectedChoice.split('|');
@@ -169,6 +170,13 @@ export default function GlobalWheelWindow() {
     } catch (error) {
       console.error('Global wheel drop failed:', error);
       const message = error instanceof Error ? error.message : String(error);
+      if (mode === 'actions') {
+        // File actions are direct operations. Keep failures local to the overlay instead of
+        // treating the workspace as an error-review fallback.
+        setFailure(message);
+        await api.finishGlobalWheel?.('background');
+        return;
+      }
       try {
         await api.handoffGlobalFiles?.({ files: incoming, mode, notice: noticeText(`Could not start the selected operation: ${message}`) });
       } catch {
@@ -234,6 +242,6 @@ export default function GlobalWheelWindow() {
         hideDescription
       />
     </div>
-    <button className="global-wheel-cancel" onClick={() => void api.finishGlobalWheel?.('converter')} aria-label="Close drop wheel">×</button>
+    <button className="global-wheel-cancel" onClick={() => void api.finishGlobalWheel?.('background')} aria-label="Close drop wheel">×</button>
   </main>;
 }

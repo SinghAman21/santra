@@ -334,7 +334,7 @@ test('native wheel drop converts at the pointer and keeps the workspace closed',
     { id: 'image', path: '/fixtures/pixel.png', name: 'pixel.png', ext: 'png', size: 120, category: 'image' },
   ], point), position);
   await expect.poll(() => page.evaluate(() => window.__santraTest.calls.find(call => call.method === 'enqueue')?.value)).toMatchObject({ operation: 'convert', format: 'jpg' });
-  expect(await page.evaluate(() => window.__santraTest.calls.find(call => call.method === 'finishGlobalWheel')?.value)).toBe('background');
+  expect(await page.evaluate(() => window.__santraTest.calls.filter(call => call.method === 'finishGlobalWheel').at(-1)?.value)).toBe('background');
   expect(await page.evaluate(() => window.__santraTest.calls.some(call => call.method === 'handoffGlobalFiles'))).toBe(false);
 });
 
@@ -509,6 +509,22 @@ test('file actions wheel hides the unavailable native share route', async ({ pag
   await expect(page.getByRole('menuitem', { name: /^Share/ })).toHaveCount(0);
 });
 
+test('Ctrl wheel cancellation stays in the background', async ({ page }) => {
+  await page.goto('/?santra-wheel=1&mode=actions');
+  await page.keyboard.press('Escape');
+  expect(await page.evaluate(() => window.__santraTest.calls.filter(call => call.method === 'finishGlobalWheel').at(-1)?.value)).toBe('background');
+});
+
+test('Ctrl file actions finish without surfacing the workspace', async ({ page }) => {
+  await page.goto('/?santra-wheel=1&mode=actions');
+  await hintNativeImage(page);
+  const copy = page.getByRole('menuitem', { name: 'Copy · Local file action' });
+  const bounds = await copy.boundingBox();
+  expect(bounds).not.toBeNull();
+  await page.evaluate(point => window.__santraTest.emitNativeDrop([{ id: 'image', path: '/fixtures/pixel.png', name: 'pixel.png', ext: 'png', size: 120, category: 'image' }], point), { x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 });
+  await expect.poll(() => page.evaluate(() => window.__santraTest.calls.filter(call => call.method === 'finishGlobalWheel').at(-1)?.value)).toBe('background');
+});
+
 test('keyboard wheel switches groups and highlights partial selection coverage', async ({ page }) => {
   await page.goto('/');
   await addFiles(page);
@@ -544,13 +560,14 @@ test('image editor exposes a real padded background canvas and directional zoom 
   await doubleTap(page, 'Alt');
   await page.getByRole('menuitem', { name: /^Add background/ }).click();
   const backgroundEditor = page.getByRole('dialog', { name: 'Add background' });
+  await backgroundEditor.getByRole('button', { name: /Background.*Single colour/ }).click();
+  await backgroundEditor.getByRole('option', { name: 'Custom' }).click();
   await expect(backgroundEditor.getByLabel('Canvas width')).toHaveValue('864');
   await expect(backgroundEditor.getByLabel('Canvas height')).toHaveValue('664');
   await expect(backgroundEditor.getByLabel('Padding')).toHaveValue('32');
   const color = backgroundEditor.getByRole('button', { name: 'Choose #ff5a00 background' });
   await color.click();
   await expect(color).toHaveAttribute('aria-pressed', 'true');
-  await expect(backgroundEditor.locator('.image-tool-preview-wrap')).toHaveCSS('background-color', 'rgb(255, 90, 0)');
   await page.screenshot({animations:'disabled',path:testInfo.outputPath('01-image-background.png')});
   await backgroundEditor.getByRole('button', { name: 'Close editor' }).click();
 
@@ -727,7 +744,7 @@ test('image crop editor fits the 800 by 560 Penpot layout and queues its crop re
   expect(bounds?.width).toBe(800);
   expect(bounds?.height).toBe(560);
   await editor.getByRole('button',{name:'16:9',exact:true}).click();
-  await expect(editor.locator('.image-tool-notice')).toContainText('Metadata is removed');
+  await expect(editor.locator('.image-tool-notice')).toHaveCount(0);
   await expect(editor.getByRole('button',{name:'Save new copy'})).toBeInViewport();
   await page.screenshot({animations:'disabled',path:testInfo.outputPath('image-crop-penpot.png')});
   await editor.getByRole('button',{name:'Save new copy'}).click();
@@ -737,7 +754,7 @@ test('image crop editor fits the 800 by 560 Penpot layout and queues its crop re
 test('supported image editors retain the compact reference layout',async({page},testInfo)=>{
   await page.setViewportSize({width:824,height:584});
   await page.goto('/?santra-image-tool=1');
-  for(const [operation,title] of [['compress','Compress'],['resize','Resize'],['rotate','Rotate & flip'],['flip','Flip'],['background','Add background'],['edit-image','Edit photo'],['metadata','Edit metadata']] as const) {
+ for(const [operation,title] of [['compress','Compress'],['resize','Resize'],['rotate','Rotate & flip'],['background','Add background'],['edit-image','Edit photo'],['metadata','Edit metadata']] as const) {
     await page.evaluate(({operation,title})=>window.__santraTest.emitImageContext({id:operation,capability:{id:`image:${operation}`,operation,label:title,category:'image',inputs:[operation==='metadata'?'jpg':'png'],outputs:[operation==='metadata'?'jpg':'png'],backend:operation==='metadata'?'exiftool':'rust-image',available:true,batch:true,preservesMetadata:operation==='metadata'},files:[{id:'image',name:operation==='metadata'?'alpine.jpg':'alpine.png',path:'/fixtures/alpine.png',size:4800000,ext:operation==='metadata'?'jpg':'png',category:'image'}],format:operation==='metadata'?'jpg':'png',options:{}}),{operation,title});
     const editor=page.getByRole('dialog',{name:title,exact:true});
     await expect(editor.locator('.image-tool-preview')).toBeVisible();

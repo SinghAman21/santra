@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import type { WheelFamily } from './file-kind';
 export interface WheelProfile { title:string; icon:LucideIcon; formats:string[]; tools:string[]; noTools:string }
 export const wheelProfiles:Record<WheelFamily,WheelProfile>={
- image:{title:'Image',icon:FileImage,formats:['WEBP','JPG','PNG','TIFF','AVIF','BMP','GIF','PDF'],tools:['compress','crop','resize','rotate','flip','background','edit-image','metadata'],noTools:'No image tools available for this selection'},
+ image:{title:'Image',icon:FileImage,formats:['WEBP','JPG','PNG','TIFF','AVIF','BMP','GIF','PDF'],tools:['compress','crop','resize','rotate','background','edit-image','metadata'],noTools:'No image tools available for this selection'},
  video:{title:'Video',icon:FileVideo,formats:['MP4','MOV','MKV','WEBM','AVI','WMV','GIF'],tools:['compress','trim','split','crop','resize','rotate','flip','speed','snapshot','mute','redact','strip-metadata','merge','gif','extract-audio'],noTools:'No video tools available. Check the local FFmpeg engine.'},
  audio:{title:'Audio',icon:AudioLines,formats:['M4A','WAV','FLAC','OGG','OPUS','AIFF','WMA','MP3'],tools:['compress','strip-metadata','normalize','visualize','trim','channels','split','merge'],noTools:'No audio tools available. Check the local FFmpeg engine.'},
  pdf:{title:'PDF',icon:FileText,formats:['PNG','JPG','TXT','PDF'],tools:['pdf-merge','pdf-extract','pdf-rotate','compress','render'],noTools:'No PDF tools available. Check local PDF engines.'},

@@ -35,6 +35,6 @@ export default function ImageToolHost() {
     format={context.format}
     initialOptions={context.options}
     onClose={() => { void api.closeImageTool?.(); setContext(null); }}
-    onApply={async options => { if (!api.applyImageTool) throw new Error('Image output is unavailable in this session.'); await api.applyImageTool({ options }); setContext(null); }}
+    onApply={async (format, options) => { if (!api.applyImageTool) throw new Error('Image output is unavailable in this session.'); await api.applyImageTool({ format, options }); setContext(null); }}
   />;
 }

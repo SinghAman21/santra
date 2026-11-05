@@ -38,7 +38,7 @@ test('catalogue links open the correct stable source-backed tools preview, inclu
     const family=families.find(f=>f.id===id)!,option=familyOptions(family,mode).find(o=>o.label===label)!;await page.goto(catalogueHref(family,mode,option));await expect(page.locator('.family-index-item[aria-pressed=true]')).toContainText(family.name);await expect(page.locator('.desk-selected h4')).toHaveText(label);await expect(page.getByRole('switch',{name:'Autoplay tool tour'})).toHaveAttribute('aria-checked','false');if(option.availability==='concept')await expect(page.locator('.desk-concept-note')).toBeVisible();if(option.backend){await expect(page.locator('.desk-selected small')).toHaveText(option.backend);await expect(page.locator('.desk-state')).toHaveText('ENGINE DEPENDENT');}
   }
   await page.locator('.desk-operation-list').getByRole('button',{name:'04 Rotate pages'}).click();await expect(page).toHaveURL(/action=Rotate\+pages/);await page.reload();await expect(page.locator('.desk-selected h4')).toHaveText('Rotate pages');
-  await page.goto(catalogueHref(families.find(f=>f.id==='presentations')!));await expect(page.locator('.desk-empty')).toContainText('paused');await expect(page.locator('.desk-operation')).toHaveCount(0);
+  await page.goto(catalogueHref(families.find(f=>f.id==='spreadsheets')!));await expect(page.locator('.desk-empty')).toContainText('paused');await expect(page.locator('.desk-operation')).toHaveCount(0);
   await page.goto('/tools');await expect(page.getByRole('heading',{name:'Try the thought process.'})).toBeVisible();
 });
 test('wheel uses all supported source options with overflow, while excluding audio editor concepts',async({page})=>{
