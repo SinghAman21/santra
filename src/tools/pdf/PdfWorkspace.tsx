@@ -1,222 +1,965 @@
-import ExtractPages from './ExtractPages';
-import Compress from './Compress';
-import RenderPage from './RenderPage';
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
-import { ArrowRight, FileText, Files, Info, LoaderCircle, RefreshCw, ShieldCheck, X } from 'lucide-react';
-import type { Capability, LocalFile } from '../../common/types';
-import './pdf-workspace.css';
-
+import { invoke } from "@tauri-apps/api/core";
+import { api, isDesktop } from "../../common/bridge";
+import { useEffect, useRef, useState } from "react";
+import { PDFDocument } from "pdf-lib";
+import ReferenceEditor from "../../common/ReferenceEditor";
+import type { Capability, LocalFile } from "../../common/types";
+import {
+  load,
+  canvas,
+  imageBytes,
+  assemble,
+  ranges,
+  bundle,
+  download,
+  metadataKeys,
+  type Source,
+  type Page,
+  type Region,
+} from "./engine";
+import "./tools.css";
 export interface PdfWorkspaceProps {
   files: LocalFile[];
   capability: Capability;
   format: string;
   initialOptions: Record<string, string>;
-  onApply: (format: string, values: Record<string, string>) => void | Promise<void>;
+  onApply: (
+    format: string,
+    values: Record<string, string>,
+  ) => void | Promise<void>;
   onClose: () => void;
-  loadPreview: (file: LocalFile) => Promise<{ url: string; width?: number; height?: number }>;
+  loadPreview: (file: LocalFile) => Promise<{ url: string }>;
 }
-
-type FieldName = 'pages' | 'page' | 'dpi' | 'angle';
-type Preview = { path: string; status: 'loading' | 'ready' | 'error'; url?: string; error?: string; width?: number; height?: number };
-type FieldDefinition = { min?: number; max?: number; default?: number };
-
-const fieldNames: FieldName[] = ['pages', 'page', 'dpi', 'angle'];
-const fieldLabels: Record<FieldName, string> = { pages: 'Pages to include', page: 'Page to render', dpi: 'Resolution (DPI)', angle: 'Clockwise rotation' };
-const fieldDefaults: Record<FieldName, string> = { pages: '1-z', page: '1', dpi: '300', angle: '90' };
-const operationDetails: Record<string, { title: string; action: string; description: string }> = {
-  'pdf-extract': { title: 'Extract pages', action: 'Extract pages', description: 'A few pages, or a whole new order. Make a PDF with just the pages you need.' },
-  'pdf-merge': { title: 'Merge PDFs', action: 'Merge PDFs', description: 'Bring your documents together in one PDF, in the current selection order.' },
-  'pdf-rotate': { title: 'Rotate pages', action: 'Rotate pages', description: 'Turn selected pages clockwise while keeping the rest of your document in place.' },
-  compress: { title: 'Compress PDF', action: 'Compress PDF', description: 'Give the document structure a tidy-up, with your original safely kept.' },
-  render: { title: 'Render a page', action: 'Render page', description: 'Save one selected page from each PDF as a PNG or JPG image.' },
-};
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : typeof error === 'string' ? error : 'An unexpected error occurred. Please try again.';
-}
-
-function normalizePages(value: string) {
-  return value.split(',').map(part => part.trim().replace(/\s*-\s*/g, '-')).join(',');
-}
-
-function initialValues(schema: Record<string, unknown>, initialOptions: Record<string, string>) {
-  const values: Record<string, string> = {};
-  for (const name of fieldNames) {
-    if (!Object.hasOwn(schema, name)) continue;
-    const definition = schema[name];
-    const range = definition && typeof definition === 'object' && !Array.isArray(definition) ? definition as FieldDefinition : null;
-    values[name] = String(range?.default ?? (Array.isArray(definition) ? definition[0] : typeof definition === 'string' ? definition : fieldDefaults[name]));
-  }
-  return { ...values, ...initialOptions };
-}
-
-export default function PdfWorkspace({ files, capability, format, initialOptions, onApply, onClose, loadPreview }: PdfWorkspaceProps) {
-  const identifier = useId();
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const errorRef = useRef<HTMLDivElement>(null);
-  const previewLoader = useRef(loadPreview);
-  const submittingRef = useRef(false);
-  previewLoader.current = loadPreview;
-  const operation = capability.operation || capability.id.split(':').pop() || '';
-  const details = operationDetails[operation] || { title: capability.label, action: 'Apply', description: 'Choose the settings for your PDF output.' };
-  const schema = capability.options && typeof capability.options === 'object' && !Array.isArray(capability.options) ? capability.options as Record<string, unknown> : {};
-  const fields = fieldNames.filter(name => Object.hasOwn(schema, name));
-  const [values, setValues] = useState(() => initialValues(schema, initialOptions));
-  const [outputFormat, setOutputFormat] = useState(() => capability.outputs.includes(format) ? format : capability.outputs[0] || '');
-  const [activeFileId, setActiveFileId] = useState(files[0]?.id || '');
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [retry, setRetry] = useState(0);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [applyError, setApplyError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const file = files.find(item => item.id === activeFileId) || files[0];
-  const previewPath = file?.ext.toLowerCase() === 'pdf' && !file.isDirectory ? file.path : '';
-  const visiblePreview = preview?.path === previewPath ? preview : null;
-  const selectionError = !files.length ? 'Select a PDF to use this workspace.'
-    : files.some(item => item.ext.toLowerCase() !== 'pdf' || item.isDirectory) ? 'This workspace accepts PDF files only.'
-      : operation === 'pdf-merge' && files.length < 2 ? 'Select at least two PDFs to merge.' : '';
-  const capabilityError = !capability.available ? 'This operation is unavailable. Configure its local backend in Settings, then try again.'
-    : !operationDetails[operation] ? 'This PDF operation is not supported in this workspace.'
-      : !capability.outputs.length ? 'No output format is available for this operation.' : '';
-  const blockingError = selectionError || capabilityError;
-  const capabilityWarning = operation !== 'compress' && capability.warning?.includes('compression is structural') ? '' : capability.warning;
-  const previewCaptionId = `${identifier}-preview-caption`;
-
+function Thumbnail({
+  source,
+  index,
+  large = false,
+}: {
+  source: Source;
+  index: number;
+  large?: boolean;
+}) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [error, setError] = useState("");
   useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    dialog.showModal();
-    closeButtonRef.current?.focus();
+    let active = true;
+    const target = ref.current;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      observer.disconnect();
+      void canvas(source, index, large ? 100 : 36)
+        .then((c) => {
+          if (active && target) {
+            target.width = c.width;
+            target.height = c.height;
+            target.getContext("2d")!.drawImage(c, 0, 0);
+          }
+          c.width = 0;
+          c.height = 0;
+        })
+        .catch((e) => {
+          if (active) setError(String(e));
+        });
+    });
+    if (target) observer.observe(target);
     return () => {
-      dialog.close();
-      if (previous?.isConnected) previous.focus();
+      active = false;
+      observer.disconnect();
     };
+  }, [source, index, large]);
+  return (
+    <>
+      <canvas ref={ref} aria-label={`Page ${index + 1} preview`} />
+      {error && <small role="alert">{error}</small>}
+    </>
+  );
+}
+const names: Record<string, string> = {
+  "pdf-organize": "Organize",
+  "pdf-merge": "Merge",
+  "pdf-split": "Split",
+  "pdf-extract": "Extract",
+  "pdf-insert": "Insert",
+  compress: "Compress",
+  redact: "Redact",
+  metadata: "Metadata",
+  render: "Export Pages",
+  "pdf-rotate": "Organize",
+};
+export default function PdfWorkspace({
+  capability,
+  onClose,
+  files,
+}: PdfWorkspaceProps) {
+  const op = capability.operation || capability.id.split(":").pop()!,
+    title = names[op] || capability.label;
+  const [sources, setSources] = useState<Source[]>([]),
+    [pages, setPages] = useState<Page[]>([]),
+    [selected, setSelected] = useState<number[]>([]),
+    [history, setHistory] = useState<Page[][]>([]),
+    [busy, setBusy] = useState(false),
+    [message, setMessage] = useState(
+      "Choose a PDF. Processing stays on this device.",
+    ),
+    [error, setError] = useState(false),
+    [expanded, setExpanded] = useState<number | null>(null),
+    [regions, setRegions] = useState<Region[]>([]),
+    [confirmed, setConfirmed] = useState(false),
+    [quality, setQuality] = useState(65),
+    [dpi, setDpi] = useState(150),
+    [format, setFormat] = useState("png"),
+    [split, setSplit] = useState("ranges"),
+    [range, setRange] = useState("1"),
+    [interval, setInterval] = useState(2),
+    [position, setPosition] = useState("end"),
+    [meta, setMeta] = useState<Record<string, string>>({});
+  const all = useRef<Source[]>([]),
+    input = useRef<HTMLInputElement>(null),
+    drag = useRef(0),
+    start = useRef<{ x: number; y: number } | null>(null),
+    lock = useRef(false);
+  const alive = useRef(true);
+  const primary = sources[0];
+  const nativeSource = useRef<LocalFile | undefined>(files[0]);
+  async function nativeUpload(paths = files) {
+    const incoming: File[] = [];
+    for (const f of paths) {
+      const data = await invoke<string>("read_pdf", { path: f.path });
+      incoming.push(
+        new File(
+          [Uint8Array.from(atob(data), (c) => c.charCodeAt(0))],
+          f.name,
+          { type: "application/pdf" },
+        ),
+      );
+    }
+    if (!nativeSource.current || !["pdf-merge", "pdf-insert"].includes(op))
+      nativeSource.current = paths[0];
+    await upload(incoming);
+  }
+  useEffect(() => {
+    if (!isDesktop) return;
+    return api.onNativeDrop?.(
+      (incoming) => {
+        void nativeUpload(incoming).catch((e) => {
+          setError(true);
+          setMessage(String(e));
+        });
+      },
+      (message) => {
+        setError(true);
+        setMessage(message);
+      },
+    );
+  }, [sources]);
+  async function choose() {
+    if (!isDesktop) {
+      input.current?.click();
+      return;
+    }
+    try {
+      await nativeUpload(await api.addFiles());
+    } catch (e) {
+      setError(true);
+      setMessage(String(e));
+    }
+  }
+  useEffect(() => {
+    if (isDesktop && files.length)
+      void nativeUpload().catch((e) => {
+        setError(true);
+        setMessage(String(e));
+      });
   }, []);
 
   useEffect(() => {
-    if (!previewPath || !file) return;
-    let ignore = false;
-    setPreview({ path: previewPath, status: 'loading' });
-    async function prepare() {
-      try {
-        const result = await previewLoader.current(file!);
-        if (typeof result?.url !== 'string' || !result.url.trim()) throw new Error('The preview service returned no page image.');
-        if (!ignore) setPreview({ ...result, path: previewPath, status: 'ready' });
-      } catch (error) {
-        if (!ignore) setPreview({ path: previewPath, status: 'error', error: errorMessage(error) });
-      }
-    }
-    void prepare();
-    return () => { ignore = true; };
-  }, [previewPath, retry]);
-
-  function updateValue(name: FieldName, value: string) {
-    setValues(previous => ({ ...previous, [name]: value }));
-    setErrors(previous => {
-      const next = { ...previous };
-      delete next[name];
-      return next;
-    });
-    setApplyError('');
-  }
-
-  async function apply(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (submittingRef.current || blockingError) return;
-    const nextErrors: Record<string, string> = {};
-    const normalized = { ...values };
-    if (!capability.outputs.includes(outputFormat)) nextErrors.format = 'Choose an available output format.';
-    for (const name of fields) {
-      const value = (values[name] || '').trim();
-      if (name === 'pages') {
-        const pages = normalizePages(value);
-        if (!/^\d+(?:-\d+|-z)?(?:,\d+(?:-\d+|-z)?)*$/.test(pages) || (pages.match(/\d+/g) || []).some(page => !Number.isSafeInteger(Number(page)) || Number(page) < 1)) nextErrors.pages = 'Use page numbers from 1, ranges such as 2-5, or 1-z for all pages. Separate entries with commas.';
-        normalized.pages = pages;
-        continue;
-      }
-      const definition = schema[name];
-      const range = definition && typeof definition === 'object' && !Array.isArray(definition) ? definition as FieldDefinition : {};
-      const minimum = range.min ?? (name === 'dpi' ? 36 : name === 'angle' ? 90 : 1);
-      const maximum = range.max ?? (name === 'dpi' ? 600 : name === 'angle' ? 270 : 100000);
-      if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < minimum || Number(value) > maximum) nextErrors[name] = `Enter a whole number from ${minimum} to ${maximum}.`;
-      if (Array.isArray(definition) && !definition.some(choice => String(choice) === value)) nextErrors[name] = 'Choose one of the available values.';
-      if (name === 'angle' && ![90, 180, 270].includes(Number(value))) nextErrors.angle = 'Choose 90°, 180° or 270° clockwise.';
-      normalized[name] = value;
-    }
-    setErrors(nextErrors);
-    setApplyError('');
-    if (Object.keys(nextErrors).length) {
-      requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
-      return;
-    }
-    submittingRef.current = true;
-    setSubmitting(true);
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      for (const s of all.current) void s.preview.destroy();
+      all.current = [];
+    };
+  }, []);
+  async function upload(incoming: File[]) {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError(false);
     try {
-      await onApply(outputFormat, normalized);
-    } catch (error) {
-      setApplyError(errorMessage(error));
-      requestAnimationFrame(() => errorRef.current?.focus());
+      const loaded: Source[] = [];
+      for (const f of op === "pdf-merge" ? incoming : incoming.slice(0, 1)) {
+        if (!alive.current) return;
+        const s = await load(f);
+        if (!alive.current) {
+          await s.preview.destroy();
+          return;
+        }
+        all.current.push(s);
+        loaded.push(s);
+      }
+      if (!loaded.length) return;
+      const next =
+        op === "pdf-merge"
+          ? [...sources, ...loaded]
+          : op === "pdf-insert" && sources.length
+            ? [sources[0], loaded[0]]
+            : loaded.slice(0, 1);
+      setSources(next);
+      setPages(
+        Array.from({ length: next[0].pdf.getPageCount() }, (_, index) => ({
+          source: next[0].id,
+          index,
+          rotation: 0,
+        })),
+      );
+      setSelected([]);
+      setHistory([]);
+      setRegions([]);
+      setConfirmed(false);
+      setMeta(
+        Object.fromEntries(
+          metadataKeys.map((key) => [
+            key,
+            String(next[0].pdf[`get${key}`]() || ""),
+          ]),
+        ),
+      );
+      setMessage("Ready. Select pages or adjust output settings.");
+    } catch (e) {
+      setError(true);
+      setMessage(String(e));
     } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
+      lock.current = false;
+      setBusy(false);
     }
   }
-
-  return <dialog ref={dialogRef} className="pdf-workspace" aria-labelledby={`${identifier}-title`} aria-describedby={`${identifier}-description`} onCancel={event => { event.preventDefault(); onClose(); }} onKeyDown={event => {
-    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return; }
-    if (event.key !== 'Tab') return;
-    const targets = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]')).filter(element => element.getClientRects().length > 0 && !element.closest('[inert]'));
-    const first = targets[0];
-    const last = targets[targets.length - 1];
-    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-  }}>
-    <header className="pdf-workspace__header">
-      <div className="pdf-workspace__identity"><span className="pdf-workspace__mark"><FileText size={23} aria-hidden="true"/></span><div><p className="pdf-workspace__eyebrow">A LITTLE LESS PAPERWORK</p><h1 id={`${identifier}-title`}>{details.title}</h1><p className="pdf-workspace__subtitle">{files[0]?.name} · Local preview</p></div></div>
-      <div className="pdf-workspace__header-actions"><span className="pdf-workspace__local"><ShieldCheck size={15} aria-hidden="true"/>On your device</span><button ref={closeButtonRef} type="button" className="pdf-workspace__close" aria-label="Close PDF workspace" onClick={onClose}><X size={21} aria-hidden="true"/></button></div>
-    </header>
-    <form className="pdf-workspace__form" noValidate onSubmit={event=>void apply(event)}><div className="pdf-workspace__body">
-      <section className="pdf-workspace__preview" aria-labelledby={`${identifier}-preview-title`}>
-        <div className="pdf-workspace__preview-toolbar"><div><span className="pdf-workspace__eyebrow">YOUR DOCUMENT</span><h2 id={`${identifier}-preview-title`}>First page preview</h2></div><span className="pdf-workspace__source-badge">Source · page 1</span></div>
-        {files.length > 1 && <label className="pdf-workspace__document-picker" htmlFor={`${identifier}-document`}>Preview document<select id={`${identifier}-document`} value={file?.id || ''} onChange={event => setActiveFileId(event.target.value)}>{files.map((item, index) => <option key={item.id} value={item.id}>{index + 1}. {item.name}</option>)}</select></label>}
-        <figure className="pdf-workspace__figure">
-          <div className="pdf-workspace__canvas" aria-busy={Boolean(previewPath && (!visiblePreview || visiblePreview.status === 'loading'))}>
-            {!previewPath ? <div className="pdf-workspace__preview-message"><FileText size={36} aria-hidden="true"/><h3>No PDF to preview</h3><p>Close this workspace and select a PDF document.</p></div>
-              : !visiblePreview || visiblePreview.status === 'loading' ? <div className="pdf-workspace__preview-message" role="status"><LoaderCircle size={30} className="pdf-workspace__spinner" aria-hidden="true"/><h3>Preparing the first page…</h3><p>Your preview is generated locally.</p></div>
-                : visiblePreview.status === 'error' ? <div className="pdf-workspace__preview-message pdf-workspace__preview-message--error" role="alert"><FileText size={34} aria-hidden="true"/><h3>Preview unavailable</h3><p>{visiblePreview.error}</p><button type="button" className="pdf-workspace__secondary" onClick={() => setRetry(previous => previous + 1)}><RefreshCw size={15} aria-hidden="true"/>Retry preview</button><small>You can still apply this operation without a preview.</small></div>
-                  : <img key={`${previewPath}-${retry}`} className="pdf-workspace__page" src={visiblePreview.url} alt={`First page of ${file?.name || 'the selected PDF'}`} aria-describedby={previewCaptionId} onError={() => setPreview(previous => previous?.path === previewPath ? { path: previewPath, status: 'error', error: 'The generated page image could not be displayed. Retry the preview.' } : previous)} />}
+  function change(next: Page[]) {
+    setHistory((h) => [...h, pages]);
+    setPages(next);
+    setSelected([]);
+  }
+  function reset() {
+    if (op === "pdf-merge") setSources([...all.current]);
+    if (primary) {
+      setPages(
+        Array.from({ length: primary.pdf.getPageCount() }, (_, index) => ({
+          source: primary.id,
+          index,
+          rotation: 0,
+        })),
+      );
+      setMeta(
+        Object.fromEntries(
+          metadataKeys.map((key) => [
+            key,
+            String(primary.pdf[`get${key}`]() || ""),
+          ]),
+        ),
+      );
+    }
+    setSelected([]);
+    setRegions([]);
+    setConfirmed(false);
+    setHistory([]);
+    setMessage("Reset to original.");
+  }
+  const chosen = pages.filter((_, i) => selected.includes(i));
+  let groups: number[][] = [];
+  let groupError = "";
+  if (primary && op === "pdf-split")
+    try {
+      groups =
+        split === "individual"
+          ? pages.map((_, i) => [i])
+          : split === "interval"
+            ? Array.from(
+                { length: Math.ceil(pages.length / Math.max(1, interval)) },
+                (_, g) =>
+                  pages
+                    .slice(g * interval, (g + 1) * interval)
+                    .map((p) => p.index),
+              )
+            : range.split(";").map((r) => ranges(r, pages.length));
+    } catch (e) {
+      groupError = String(e);
+    }
+  async function save() {
+    if (!primary || lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError(false);
+    try {
+      const outputs: Record<string, Uint8Array> = {};
+      const base = primary.name
+        .replace(/\.pdf$/i, "")
+        .replace(/[^\p{L}\p{N}._-]/gu, "_");
+      if (op === "render") {
+        if (!chosen.length) throw Error("Select pages to export.");
+        for (const p of chosen) {
+          setMessage(`Rendering page ${p.index + 1}…`);
+          const c = await canvas(primary, p.index, dpi);
+          outputs[`${base}-page-${p.index + 1}.${format}`] = await imageBytes(
+            c,
+            `image/${format}`,
+          );
+          c.width = 0;
+        }
+      } else if (op === "pdf-split") {
+        if (groupError) throw Error(groupError);
+        for (let i = 0; i < groups.length; i++)
+          outputs[`${base}-part-${i + 1}.pdf`] = await assemble(
+            sources,
+            groups[i].map((index) => pages[index]),
+          );
+      } else if (op === "metadata") {
+        const doc = await PDFDocument.load(primary.bytes, {
+          updateMetadata: false,
+        });
+        doc.setTitle(meta.Title);
+        doc.setAuthor(meta.Author);
+        doc.setSubject(meta.Subject);
+        doc.setKeywords(meta.Keywords.split(",").map((v) => v.trim()));
+        doc.setCreator(meta.Creator);
+        doc.setProducer(meta.Producer);
+        outputs[`${base}-metadata.pdf`] = await doc.save();
+      } else if (op === "compress" || op === "redact") {
+        if (op === "redact" && (!confirmed || !regions.length))
+          throw Error(
+            "Draw redactions and confirm permanent rasterization first.",
+          );
+        const doc = await PDFDocument.create();
+        for (let i = 0; i < pages.length; i++) {
+          setMessage(`Processing page ${i + 1} of ${pages.length}…`);
+          const c = await canvas(
+            primary,
+            i,
+            op === "redact"
+              ? 150
+              : quality < 40
+                ? 72
+                : quality < 75
+                  ? 110
+                  : 150,
+          );
+          const ctx = c.getContext("2d")!;
+          ctx.fillStyle = "#000";
+          for (const r of regions.filter((r) => r.page === i))
+            ctx.fillRect(
+              Math.floor(r.x * c.width),
+              Math.floor(r.y * c.height),
+              Math.ceil(r.w * c.width) + 1,
+              Math.ceil(r.h * c.height) + 1,
+            );
+          const image =
+            op === "redact"
+              ? await doc.embedPng(await imageBytes(c, "image/png"))
+              : await doc.embedJpg(
+                  await imageBytes(c, "image/jpeg", quality / 100),
+                );
+          const view = (await primary.preview.getPage(i + 1)).getViewport({
+            scale: 1,
+          });
+          doc.addPage([view.width, view.height]).drawImage(image, {
+            x: 0,
+            y: 0,
+            width: view.width,
+            height: view.height,
+          });
+          c.width = 0;
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+        outputs[`${base}-${op}.pdf`] = await doc.save();
+      } else {
+        let order = op === "pdf-extract" ? chosen : pages;
+        if (op === "pdf-merge")
+          order = sources.flatMap((s) =>
+            s.pdf
+              .getPageIndices()
+              .map((index) => ({ source: s.id, index, rotation: 0 })),
+          );
+        if (op === "pdf-insert") {
+          const donor = sources[1];
+          if (!donor) throw Error("Add an insertion PDF.");
+          if (!selected.length) throw Error("Select source pages to insert.");
+          const additions = donor.pdf
+            .getPageIndices()
+            .filter((i) => selected.includes(i))
+            .map((index) => ({ source: donor.id, index, rotation: 0 }));
+          const at =
+            position === "beginning"
+              ? 0
+              : position === "end"
+                ? pages.length
+                : Math.max(0, Number(range) - 1) +
+                  (position === "after" ? 1 : 0);
+          if (at > pages.length)
+            throw Error("Insertion page is outside the document.");
+          order = [...pages.slice(0, at), ...additions, ...pages.slice(at)];
+        }
+        outputs[`${base}-${title.toLowerCase()}.pdf`] = await assemble(
+          sources,
+          order,
+        );
+      }
+      const entries = Object.entries(outputs);
+      const bytes =
+        entries.length === 1 ? entries[0][1] : await bundle(outputs);
+      if (isDesktop && nativeSource.current) {
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += 32768)
+          binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
+        await invoke("save_pdf_output", {
+          path: nativeSource.current.path,
+          format: entries.length === 1 ? entries[0][0].split(".").pop() : "zip",
+          data: btoa(binary),
+        });
+      } else
+        download(
+          bytes,
+          entries.length === 1
+            ? entries[0][0]
+            : `${base}-${title.toLowerCase()}.zip`,
+        );
+      setMessage(
+        op === "compress"
+          ? `Original ${(primary.bytes.length / 1024).toFixed(1)} KB → ${(bytes.length / 1024).toFixed(1)} KB. ${bytes.length < primary.bytes.length ? `${((1 - bytes.length / primary.bytes.length) * 100).toFixed(1)}% smaller.` : "No savings; output is larger."}`
+          : isDesktop
+            ? "Output queued locally. Your original is preserved."
+            : "Output downloaded. Your original is preserved.",
+      );
+    } catch (e) {
+      setError(true);
+      setMessage(String(e));
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  const display =
+    op === "pdf-insert" && sources[1]
+      ? sources[1].pdf
+          .getPageIndices()
+          .map((index) => ({ source: sources[1].id, index, rotation: 0 }))
+      : pages;
+  return (
+    <ReferenceEditor
+      title={title}
+      subtitle={`${primary?.name || "PDF tools"} · Local processing`}
+      onClose={onClose}
+      onReset={reset}
+      onSubmit={save}
+      actionLabel={op === "metadata" ? "Save Metadata" : "Download output"}
+      busy={busy}
+      disabled={!primary || !capability.available}
+      notice={message}
+      error={error}
+      output={
+        primary
+          ? `${pages.length} pages · ${(primary.bytes.length / 1024).toFixed(1)} KB`
+          : "No PDF selected"
+      }
+      preview={
+        <div
+          className="pdf-tools"
+          inert={busy}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files.length)
+              void upload(Array.from(e.dataTransfer.files));
+          }}
+        >
+          <div className="pdf-toolbar">
+            <span>{display.length} pages</span>
+            <button type="button" disabled={busy} onClick={() => void choose()}>
+              Upload PDF
+            </button>
           </div>
-          <figcaption id={previewCaptionId}><strong title={file?.name}>{file?.name || 'No document selected'}</strong><span>The preview shows the original first page. Settings are applied to the saved output.</span></figcaption>
-        </figure>
-      </section>
-      <section className="pdf-workspace__settings" aria-label="PDF output settings" aria-busy={submitting}>
-        <div className="pdf-workspace__settings-content">
-          <div className="pdf-workspace__settings-heading"><span className="pdf-workspace__eyebrow">MAKE IT YOURS</span><h2>Output settings</h2><p className="pdf-workspace__sr-only" id={`${identifier}-description`}>{details.description}</p></div>
-          {blockingError && <div className="pdf-workspace__error" role="alert">{blockingError}</div>}
-          {operation === 'pdf-merge' && <section className="pdf-workspace__merge" aria-labelledby={`${identifier}-merge-title`}><h3 id={`${identifier}-merge-title`}><Files size={17} aria-hidden="true"/>Selection order <span>{files.length} PDFs</span></h3><ol>{files.map(item => <li key={item.id}><FileText size={16} aria-hidden="true"/><span title={item.name}>{item.name}</span></li>)}</ol><p>All pages are merged in the order shown. Document-level metadata is discarded.</p></section>}
-          <fieldset className="pdf-workspace__fields" disabled={submitting}>
-            <legend className="pdf-workspace__sr-only">Operation and output options</legend>
-            <div className="pdf-workspace__field"><label htmlFor={`${identifier}-format`}>Output format</label><select id={`${identifier}-format`} value={outputFormat} aria-invalid={Boolean(errors.format)} aria-describedby={errors.format ? `${identifier}-format-error` : undefined} onChange={event => { setOutputFormat(event.target.value); setErrors(previous => { const next = { ...previous }; delete next.format; return next; }); setApplyError(''); }}>{capability.outputs.map(choice => <option key={choice} value={choice}>{choice.toUpperCase()}</option>)}</select>{errors.format && <p className="pdf-workspace__field-error" id={`${identifier}-format-error`}>{errors.format}</p>}</div>
-            {fields.map(name => {
-              const definition = schema[name];
-              const choices = Array.isArray(definition) ? definition : null;
-              const range = definition && typeof definition === 'object' && !choices ? definition as FieldDefinition : {};
-              const help = name === 'pages' ? 'Use 1-z for all pages. z means the last page.' : name === 'page' ? 'One page per input PDF. The preview continues to show page 1.' : name === 'dpi' ? 'Higher resolution produces larger images and uses more memory.' : 'Rotation is added clockwise to the selected pages.';
-              return <div className="pdf-workspace__field" key={name}><label htmlFor={`${identifier}-${name}`}>{name === 'pages' && operation === 'pdf-rotate' ? 'Pages to rotate' : fieldLabels[name]}</label>{choices ? <select id={`${identifier}-${name}`} value={values[name] ?? ''} aria-invalid={Boolean(errors[name])} aria-describedby={`${identifier}-${name}-help${errors[name] ? ` ${identifier}-${name}-error` : ''}`} onChange={event => updateValue(name, event.target.value)}>{choices.map(choice => <option key={String(choice)} value={String(choice)}>{name === 'angle' ? `${choice}° clockwise` : String(choice)}</option>)}</select> : <input id={`${identifier}-${name}`} type={name === 'pages' ? 'text' : 'number'} inputMode={name === 'pages' ? 'text' : 'numeric'} min={name === 'pages' ? undefined : range.min ?? (name === 'dpi' ? 36 : 1)} max={range.max} step={name === 'pages' ? undefined : 1} value={values[name] ?? ''} placeholder={name === 'pages' ? '3,1-2,6-z' : fieldDefaults[name]} spellCheck={false} autoComplete="off" aria-invalid={Boolean(errors[name])} aria-describedby={`${identifier}-${name}-help${errors[name] ? ` ${identifier}-${name}-error` : ''}`} onChange={event => updateValue(name, event.target.value)}/>}<p className="pdf-workspace__field-help" id={`${identifier}-${name}-help`}>{help}</p>{errors[name] && <p className="pdf-workspace__field-error" id={`${identifier}-${name}-error`}>{errors[name]}</p>}</div>;
-            })}
-          </fieldset>
-          {operation === 'pdf-extract' && <ExtractPages/>}
-          {operation === 'compress' && <Compress/>}
-          {operation === 'render' && <RenderPage/>}
-          {capabilityWarning && <p className="pdf-workspace__capability-note">{capabilityWarning}</p>}
-          {applyError && <div className="pdf-workspace__error" ref={errorRef} role="alert" tabIndex={-1}><strong>Could not apply these settings</strong><p>{applyError}</p></div>}
-          {Object.keys(errors).length > 0 && <p className="pdf-workspace__field-error" role="alert">Check the highlighted settings before continuing.</p>}
+          <input
+            ref={input}
+            type="file"
+            accept="application/pdf,.pdf"
+            multiple={op === "pdf-merge"}
+            hidden
+            onChange={(e) => {
+              void upload(Array.from(e.target.files || []));
+              e.target.value = "";
+            }}
+          />
+          {!primary && (
+            <button
+              type="button"
+              className="pdf-upload"
+              onClick={() => void choose()}
+            >
+              Drop a PDF here or choose a file
+              {files.length > 0 && (
+                <small>Choose {files[0].name} to load its pages</small>
+              )}
+            </button>
+          )}
+          {op === "pdf-merge" ? (
+            <div className="pdf-grid">
+              {sources.map((s, i) => (
+                <article
+                  key={s.id}
+                  draggable={!busy}
+                  onDragStart={() => {
+                    drag.current = i;
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.stopPropagation();
+                    if (e.dataTransfer.files.length) {
+                      void upload(Array.from(e.dataTransfer.files));
+                      return;
+                    }
+                    const next = [...sources];
+                    next.splice(i, 0, next.splice(drag.current, 1)[0]);
+                    setSources(next);
+                  }}
+                >
+                  <Thumbnail source={s} index={0} />
+                  <span>
+                    {i + 1}. {s.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSources((v) => v.filter((x) => x.id !== s.id))
+                    }
+                  >
+                    Remove
+                  </button>
+                </article>
+              ))}
+              <button
+                type="button"
+                className="pdf-upload"
+                onClick={() => void choose()}
+              >
+                + Add PDFs
+              </button>
+            </div>
+          ) : (
+            <div className="pdf-grid">
+              {display.map((p, i) => (
+                <article
+                  key={`${p.source}-${p.index}`}
+                  className={selected.includes(i) ? "selected" : ""}
+                  draggable={
+                    !busy && ["pdf-organize", "pdf-rotate"].includes(op)
+                  }
+                  onDragStart={() => {
+                    drag.current = i;
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.stopPropagation();
+                    if (e.dataTransfer.files.length) {
+                      void upload(Array.from(e.dataTransfer.files));
+                      return;
+                    }
+                    const next = [...pages];
+                    next.splice(i, 0, next.splice(drag.current, 1)[0]);
+                    change(next);
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-pressed={selected.includes(i)}
+                    aria-label={`Select page ${p.index + 1}`}
+                    onClick={() =>
+                      setSelected((v) =>
+                        v.includes(i) ? v.filter((x) => x !== i) : [...v, i],
+                      )
+                    }
+                    onDoubleClick={() => setExpanded(i)}
+                  >
+                    <span className="pdf-number">{p.index + 1}</span>
+                    <div style={{ transform: `rotate(${p.rotation}deg)` }}>
+                      <Thumbnail
+                        source={sources.find((s) => s.id === p.source)!}
+                        index={p.index}
+                      />
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="pdf-preview-button"
+                    onClick={() => setExpanded(i)}
+                    aria-label={`Preview page ${p.index + 1}`}
+                  >
+                    Preview
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+          {expanded !== null && display[expanded] && (
+            <div className="pdf-expanded">
+              <button type="button" onClick={() => setExpanded(null)}>
+                Close preview
+              </button>
+              <div
+                className="pdf-redaction"
+                onPointerDown={(e) => {
+                  if (op !== "redact") return;
+                  const b = e.currentTarget.getBoundingClientRect();
+                  start.current = {
+                    x: (e.clientX - b.left) / b.width,
+                    y: (e.clientY - b.top) / b.height,
+                  };
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                }}
+                onPointerUp={(e) => {
+                  if (!start.current) return;
+                  const b = e.currentTarget.getBoundingClientRect(),
+                    x = Math.max(
+                      0,
+                      Math.min(1, (e.clientX - b.left) / b.width),
+                    ),
+                    y = Math.max(
+                      0,
+                      Math.min(1, (e.clientY - b.top) / b.height),
+                    ),
+                    a = start.current;
+                  start.current = null;
+                  if (Math.abs(a.x - x) > 0.002 && Math.abs(a.y - y) > 0.002) {
+                    setRegions((v) => [
+                      ...v,
+                      {
+                        page: expanded,
+                        x: Math.min(a.x, x),
+                        y: Math.min(a.y, y),
+                        w: Math.abs(a.x - x),
+                        h: Math.abs(a.y - y),
+                      },
+                    ]);
+                    setConfirmed(false);
+                  }
+                }}
+              >
+                <Thumbnail
+                  source={primary}
+                  index={display[expanded].index}
+                  large
+                />
+                {regions
+                  .filter((r) => r.page === expanded)
+                  .map((r, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        left: `${r.x * 100}%`,
+                        top: `${r.y * 100}%`,
+                        width: `${r.w * 100}%`,
+                        height: `${r.h * 100}%`,
+                      }}
+                    />
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
-      </section></div>
-      <div className="pdf-workspace__notice" role="status">{capabilityWarning || details.description}</div>
-      <footer className="pdf-workspace__footer"><p>New {outputFormat.toUpperCase()} copy · {files[0]?.name}<span>Configured destination · Originals kept</span></p><div><button type="button" className="pdf-workspace__cancel" disabled={submitting} onClick={()=>{setValues(initialValues(schema,initialOptions));setOutputFormat(format);setErrors({});setApplyError('')}}>Reset</button><button type="button" className="pdf-workspace__cancel" disabled={submitting} onClick={onClose}>Cancel</button><button type="submit" aria-label={details.action} className="pdf-workspace__apply" disabled={Boolean(blockingError) || submitting}>{submitting?'Queueing…':'Save new copy'}</button></div></footer>
-    </form>
-  </dialog>;
+      }
+      settings={
+        <>
+          <button
+            type="button"
+            onClick={() => setSelected(display.map((_, i) => i))}
+          >
+            Select All
+          </button>{" "}
+          <button type="button" onClick={() => setSelected([])}>
+            Clear Selection
+          </button>
+          {["pdf-organize", "pdf-rotate"].includes(op) && (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  change(pages.filter((_, i) => !selected.includes(i)))
+                }
+              >
+                Delete selected
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  change(
+                    pages.map((p, i) =>
+                      selected.includes(i)
+                        ? { ...p, rotation: (p.rotation + 90) % 360 }
+                        : p,
+                    ),
+                  )
+                }
+              >
+                Rotate selected
+              </button>
+              <button
+                type="button"
+                disabled={!history.length}
+                onClick={() => {
+                  setPages(history[history.length - 1]);
+                  setHistory((h) => h.slice(0, -1));
+                  setSelected([]);
+                }}
+              >
+                Undo
+              </button>
+              <label>
+                Move selected page to position
+                <input
+                  type="number"
+                  min="1"
+                  max={pages.length}
+                  value={range}
+                  onChange={(e) => setRange(e.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={selected.length !== 1}
+                onClick={() => {
+                  const next = [...pages];
+                  next.splice(
+                    Math.max(0, Math.min(pages.length - 1, Number(range) - 1)),
+                    0,
+                    next.splice(selected[0], 1)[0],
+                  );
+                  change(next);
+                }}
+              >
+                Move page
+              </button>
+            </>
+          )}
+          {op === "pdf-split" && (
+            <>
+              <label>
+                Split mode
+                <select
+                  value={split}
+                  onChange={(e) => setSplit(e.target.value)}
+                >
+                  <option value="ranges">Page ranges</option>
+                  <option value="individual">Individual pages</option>
+                  <option value="interval">Equal intervals</option>
+                </select>
+              </label>
+              {split === "ranges" && (
+                <label>
+                  Groups (semicolon separated)
+                  <input
+                    value={range}
+                    onChange={(e) => setRange(e.target.value)}
+                    placeholder="1-3;4-6"
+                  />
+                </label>
+              )}
+              {split === "interval" && (
+                <label>
+                  Pages per document
+                  <input
+                    type="number"
+                    min="1"
+                    value={interval}
+                    onChange={(e) =>
+                      setInterval(Math.max(1, Number(e.target.value)))
+                    }
+                  />
+                </label>
+              )}
+              <p>
+                {groupError ||
+                  groups
+                    .map(
+                      (g, i) =>
+                        `Part ${i + 1}: ${g.map((p) => p + 1).join(", ")}`,
+                    )
+                    .join(" · ")}
+              </p>
+            </>
+          )}
+          {op === "pdf-insert" && (
+            <>
+              <p>
+                Upload the primary PDF, then the insertion PDF. Select insertion
+                pages in the grid.
+              </p>
+              <label>
+                Insert position
+                <select
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                >
+                  {["beginning", "end", "before", "after"].map((p) => (
+                    <option key={p}>{p}</option>
+                  ))}
+                </select>
+              </label>
+              {["before", "after"].includes(position) && (
+                <label>
+                  Primary page
+                  <input
+                    type="number"
+                    min="1"
+                    max={pages.length}
+                    value={range}
+                    onChange={(e) => setRange(e.target.value)}
+                  />
+                </label>
+              )}
+              {primary && (
+                <section aria-label="Primary document pages">
+                  <p>Primary document · choose insertion page</p>
+                  <div className="pdf-grid pdf-primary-pages">
+                    {primary.pdf.getPageIndices().map((index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        aria-label={`Insert relative to page ${index + 1}`}
+                        aria-pressed={Number(range) === index + 1}
+                        onClick={() => setRange(String(index + 1))}
+                      >
+                        <Thumbnail source={primary} index={index} />
+                        <span>{index + 1}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+          {op === "compress" && (
+            <>
+              <label>
+                Compression
+                <select
+                  value={
+                    quality < 40 ? "high" : quality < 75 ? "medium" : "low"
+                  }
+                  onChange={(e) =>
+                    setQuality(
+                      e.target.value === "high"
+                        ? 30
+                        : e.target.value === "medium"
+                          ? 65
+                          : 90,
+                    )
+                  }
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </label>
+              <label>
+                Image quality {quality}%
+                <input
+                  type="range"
+                  min="10"
+                  max="95"
+                  value={quality}
+                  onChange={(e) => setQuality(Number(e.target.value))}
+                />
+              </label>
+              <p>
+                Rebuilds pages as JPEG images. Selectable text and vector
+                quality are lost. Output can be larger.
+              </p>
+            </>
+          )}
+          {op === "redact" && (
+            <>
+              <p>
+                Double-click a page, then drag rectangles over sensitive areas.{" "}
+                {regions.length} regions.
+              </p>
+              <p>
+                Secure redaction rebuilds every page as pixels. Text, vectors,
+                annotations, attachments and document metadata are discarded.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setRegions((r) => r.slice(0, -1));
+                  setConfirmed(false);
+                }}
+              >
+                Undo region
+              </button>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                />
+                I confirm permanent rasterization and removal of marked content.
+              </label>
+            </>
+          )}
+          {op === "metadata" && (
+            <>
+              {metadataKeys.map((key) => (
+                <label key={key}>
+                  {key}
+                  <input
+                    value={meta[key] || ""}
+                    onChange={(e) =>
+                      setMeta((v) => ({ ...v, [key]: e.target.value }))
+                    }
+                  />
+                </label>
+              ))}
+              <p>
+                Created:{" "}
+                {primary?.pdf.getCreationDate()?.toLocaleString() ||
+                  "Unavailable"}
+                <br />
+                Modified:{" "}
+                {primary?.pdf.getModificationDate()?.toLocaleString() ||
+                  "Unavailable"}
+              </p>
+            </>
+          )}
+          {op === "render" && (
+            <>
+              <label>
+                Image format
+                <select
+                  value={format}
+                  onChange={(e) => setFormat(e.target.value)}
+                >
+                  <option value="png">PNG</option>
+                  <option value="jpeg">JPEG</option>
+                  {document
+                    .createElement("canvas")
+                    .toDataURL("image/webp")
+                    .startsWith("data:image/webp") && (
+                    <option value="webp">WebP</option>
+                  )}
+                </select>
+              </label>
+              <label>
+                Resolution
+                <select
+                  value={dpi}
+                  onChange={(e) => setDpi(Number(e.target.value))}
+                >
+                  {[72, 150, 300].map((n) => (
+                    <option key={n} value={n}>
+                      {n} DPI
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+        </>
+      }
+    />
+  );
 }

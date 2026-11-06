@@ -62,14 +62,8 @@ impl PdfBackend {
     }
 
     pub fn capabilities(&self) -> Vec<Value> {
-        ["compress", "pdf-extract", "pdf-merge", "pdf-rotate", "render"].iter().map(|operation| {
-            let outputs = if *operation == "render" { vec!["png", "jpg"] } else { vec!["pdf"] };
-            json!({ "id": format!("pdf:{operation}"), "operation": operation, "label": operation.replace('-', " "),
-                "category": "pdf", "inputs": ["pdf"], "outputs": outputs,
-                "backend": if *operation == "render" { "poppler" } else { "qpdf" },
-                "available": outputs.iter().any(|output| self.supports(operation, output)),
-                "batch": *operation != "pdf-merge", "preservesMetadata": *operation != "pdf-merge",
-                "options": {}, "warning": if *operation == "compress" { "Structural compression may not reduce file size." } else { "Processed locally; fonts and page appearance depend on the source PDF." } })
+        ["pdf-organize", "pdf-merge", "pdf-split", "pdf-extract", "pdf-insert", "compress", "redact", "metadata", "render"].iter().map(|operation| {
+            json!({"id":format!("pdf:{operation}"),"operation":operation,"label":operation.replace("pdf-", ""),"category":"pdf","inputs":["pdf"],"outputs":["pdf"],"backend":"browser-pdf","available":true,"batch":false,"preservesMetadata":false,"options":{}})
         }).collect()
     }
 

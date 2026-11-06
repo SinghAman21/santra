@@ -12,18 +12,74 @@
   },
   "app": {
     "windows": [
-      { "label": "workspace", "title": "Santra", "url": "index.html", "width": 1280, "height": 840, "minWidth": 900, "minHeight": 620 },
-      { "label": "wheel", "title": "Santra wheel", "url": "index.html?santra-wheel=1", "width": 520, "height": 620, "decorations": false, "transparent": true, "alwaysOnTop": true, "skipTaskbar": true, "resizable": false, "visible": false },
-      { "label": "image", "title": "Santra image editor", "url": "index.html?santra-image-tool=1", "width": 824, "height": 584, "minWidth": 680, "minHeight": 540, "decorations": false, "visible": false },
-      { "label": "video", "title": "Santra video editor", "url": "index.html?santra-video-tool=1", "width": 824, "height": 584, "minWidth": 680, "minHeight": 540, "decorations": false, "visible": false }
+      {
+        "label": "workspace",
+        "title": "Santra",
+        "url": "index.html",
+        "width": 1280,
+        "height": 840,
+        "minWidth": 900,
+        "minHeight": 620
+      },
+      {
+        "label": "wheel",
+        "title": "Santra wheel",
+        "url": "index.html?santra-wheel=1",
+        "width": 520,
+        "height": 620,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "visible": false
+      },
+      {
+        "label": "image",
+        "title": "Santra image editor",
+        "url": "index.html?santra-image-tool=1",
+        "width": 824,
+        "height": 584,
+        "minWidth": 680,
+        "minHeight": 540,
+        "decorations": false,
+        "visible": false
+      },
+      {
+        "label": "video",
+        "title": "Santra video editor",
+        "url": "index.html?santra-video-tool=1",
+        "width": 824,
+        "height": 584,
+        "minWidth": 680,
+        "minHeight": 540,
+        "decorations": false,
+        "visible": false
+      },
+      {
+        "label": "pdf",
+        "title": "Santra PDF tools",
+        "url": "index.html?santra-pdf-tool=1",
+        "width": 824,
+        "height": 584,
+        "minWidth": 680,
+        "minHeight": 540,
+        "decorations": false,
+        "visible": false
+      }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: santra-media: http://santra-media.localhost; media-src 'self' blob: santra-media: http://santra-media.localhost; connect-src 'self' ws://127.0.0.1:* santra-media: http://santra-media.localhost; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: santra-media: http://santra-media.localhost; media-src 'self' blob: santra-media: http://santra-media.localhost; connect-src 'self' ws://127.0.0.1:* santra-media: http://santra-media.localhost; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; worker-src 'self' blob:"
     }
   },
   "bundle": {
     "active": true,
-    "icon": ["../build/icon.png", "../build/icon.ico"],
-    "resources": { "../THIRD_PARTY_NOTICES.md": "licenses/THIRD_PARTY_NOTICES.md" }
+    "icon": [
+      "../build/icon.png",
+      "../build/icon.ico"
+    ],
+    "resources": {
+      "../THIRD_PARTY_NOTICES.md": "licenses/THIRD_PARTY_NOTICES.md"
+    }
   }
 }

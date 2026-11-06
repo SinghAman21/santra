@@ -1,0 +1,123 @@
+.pdf-tools {
+  height: 100%;
+  overflow: auto;
+  position: relative;
+  background: #f7f7f7;
+  padding: 8px;
+}
+.pdf-toolbar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  color: #777;
+  font-size: 12px;
+}
+.pdf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.pdf-grid article {
+  position: relative;
+  background: white;
+  border: 2px solid white;
+  border-radius: 9px;
+  padding: 6px;
+  box-shadow: 0 2px 4px #0001;
+  overflow: hidden;
+}
+.pdf-grid article.selected {
+  border-color: #ff5a00;
+}
+.pdf-grid article button {
+  width: 100%;
+  padding: 0;
+}
+.pdf-grid canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.pdf-number {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: #ff5a00;
+  color: white;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  font-size: 11px;
+}
+.pdf-upload {
+  border: 1px dashed #bbb;
+  border-radius: 10px;
+  min-height: 120px;
+  width: 100%;
+  display: grid;
+  place-content: center;
+  gap: 12px;
+}
+.pdf-expanded {
+  position: absolute;
+  inset: 0;
+  background: #eee;
+  overflow: auto;
+  z-index: 3;
+  padding: 12px;
+}
+.pdf-redaction {
+  position: relative;
+  width: fit-content;
+  margin: auto;
+  touch-action: none;
+  line-height: 0;
+}
+.pdf-redaction canvas {
+  max-width: 100%;
+  height: auto;
+}
+.pdf-redaction span {
+  position: absolute;
+  background: #000;
+  pointer-events: none;
+}
+.reference-editor-settings label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+}
+.reference-editor-settings input:not([type="checkbox"]),
+.reference-editor-settings select {
+  width: 100%;
+  min-width: 0;
+}
+.pdf-tools button:focus-visible {
+  outline: 2px solid #ff5a00;
+  outline-offset: 2px;
+}
+
+.pdf-grid {
+  grid-template-columns: repeat(auto-fill, minmax(90px, 100px));
+}
+.pdf-grid .pdf-preview-button {
+  font-size: 10px;
+  color: #666;
+  padding: 4px;
+}
+.pdf-grid article > span {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.pdf-primary-pages {
+  max-height: 200px;
+  overflow: auto;
+}
+.pdf-primary-pages button[aria-pressed="true"] {
+  outline: 2px solid #ff5a00;
+}

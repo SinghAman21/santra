@@ -1,6 +1,6 @@
 # Capability specification and source registry
 
-The `tauri-rt` branch uses Tauri and a runtime capability registry. Shift, Alt, and Ctrl each require two complete taps during an active drag before the wheel opens; a held modifier at drag start does not count. Dropping on a conversion slice queues a local job and closes the wheel without showing the workspace; failures open the workspace with an error. Rust image/subtitle/archive routes and detected FFmpeg, Poppler, qpdf, Pandoc, LibreOffice, and optional ExifTool routes are implemented in code. Rust raster processing removes metadata; detected ExifTool enables JPEG metadata editing as a same-format copy. FFmpeg includes snapshot, GIF, visualization, bounded redaction, split ranges, and ordered merge. The detailed status and native validation gaps are in `TAURI_PARITY_MATRIX.md`.
+The `tauri-rt` branch uses Tauri and a runtime capability registry. Shift, Alt, and Ctrl each require two complete taps during an active drag before the wheel opens; a held modifier at drag start does not count. Dropping on a conversion slice queues a local job and closes the wheel without showing the workspace; failures close the wheel without opening the workspace. Rust image/subtitle/archive routes and detected FFmpeg, Poppler, qpdf, Pandoc, LibreOffice, and optional ExifTool routes are implemented in code. Rust raster processing removes metadata; detected ExifTool enables JPEG metadata editing as a same-format copy. FFmpeg includes snapshot, GIF, visualization, bounded redaction, split ranges, and ordered merge. The detailed status and native validation gaps are in `TAURI_PARITY_MATRIX.md`.
 
 Research date: 2026-10-19. Only the public [Tangerine website](https://tangerineformac.com/) was read. No application binary was downloaded, run, decompiled, or reverse engineered. Public marketing is evidence of advertised behavior, not a tested technical implementation or Santra compatibility.
 
@@ -44,7 +44,7 @@ The requirement table is an acceptance checklist, not a list of absent features.
 | Subtitles | Built-in SRT/VTT conversion and TXT output | Styling/settings may be lost; TXT omits timing |
 | Images | Bundled Rust raster processing with detected JPG/PNG/WebP/TIFF/AVIF support and image operations; a separate local-preview tool window exposes stable crop bounds with corner/edge handles and keyboard nudge, resize with an encoder-gated output extension, rotate with flip controls, single-colour/local-image/landscape/portrait/custom canvas choices, brightness/contrast/saturation, compression, editable EXIF fields, and a metadata-removal copy | Metadata inspection beyond editable EXIF text fields, annotation, redaction, collage, and advanced photo controls are not implemented; native loading and detected formats gate availability; local background-image selection still requires native end-to-end validation; SVG disabled; HEIC backend-dependent |
 | Audio/video | Capability-gated FFmpeg video wheel/editor: conversion, compression, trim, split, compatible merge, crop, resize, rotate/flip, speed, frame snapshots, mute, solid time-ranged redaction, metadata deletion, GIF, and audio extraction | FFmpeg/FFprobe feature detection gates each route; uses primary audio/video streams; redaction is fixed-coordinate (not tracked/blurred); re-encoding may increase size; audio editor remains proposal-only |
-| PDF | qpdf structural compression, extraction, merge, rotation; Poppler rendering | One rendered page per job; PDF-to-office/OCR not claimed |
+| PDF | Nine local popup tools using pdf-lib, PDF.js, Canvas and fflate | Raster compression/redaction lose text and vector fidelity; PDF-to-office/OCR not claimed |
 | Documents | Pandoc conversion when sandbox and readers/writers are detected | Input/resource limits, fidelity loss, no PDF/filter support; inspect registry warnings |
 | Office | LibreOffice probing exists | Conversion disabled pending isolation of macros/external resources |
 | Archives | Built-in ZIP/TAR/GZIP creation and extraction using mature archive libraries | ZIP STORE creation and STORE/DEFLATE extraction; plain USTAR; GZIP accepts one regular file; bounded sizes/counts and no links/unsafe paths; RAR/7z unsupported |
@@ -81,3 +81,25 @@ Native drag-enter inspects bounded headers (up to 512 bytes per regular file), w
 All family wheels use the shared white reference geometry. Video/audio, PDF, archive, document/EPUB and subtitle reviews use the compact reference layout. No archive inspection, EPUB certification, office conversion, or proposal-only audio/PDF tool is enabled by these UI changes. Waveform accents use `#ff5a00`.
 
 Wheel positioning now centers the ring on the opening cursor, with monitor/work-area edge clamping. Native headings/captions/pagination no longer change the ring center. This improves the chance of immediate native drag-enter detection; cursor coordinates alone do not identify a file, and unknown input remains neutral until drag metadata arrives. Processing support is unchanged.
+
+
+### Local PDF popup tools (November 2026)
+
+The capability registry exposes Organize, Merge, Split, Extract, Insert, Compress,
+Redact, Metadata, and Export Pages in that wheel order. All use the shared
+Audio/Image `ReferenceEditor` popup shell. Native wheel activation uses a compact
+PDF popup host without focusing the workspace; deliberate workspace activation
+uses the same editor as a modal. PNG/JPEG are page-export options, not separate
+PDF wheel conversions. PDF.js renders lazy page thumbnails with a bundled worker;
+pdf-lib edits documents and fflate bundles multiple outputs. No remote resources
+or uploads are used. Native outputs enter the local job system with existing
+collision handling; browser outputs download directly.
+
+Compression rebuilds pages as JPEGs and can increase file size. Secure redaction
+requires confirmation and rebuilds every page as PNG pixels, discarding text,
+vectors, attachments, annotations and document metadata. Both retain displayed
+page dimensions and orientation. Inputs are bounded to 100 MB and 2,000 pages;
+individual rendering is limited to 32 megapixels. Password-protected documents
+are rejected. Real Windows/GNOME file-manager drag validation remains manual.
+
+Native editor handoff filters mixed selections against the selected capability using inspected file metadata, matching editor validation. Unsupported files do not block compatible files from opening a tool.

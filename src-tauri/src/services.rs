@@ -129,6 +129,7 @@ struct Data {
     pending_drops: HashMap<String, Vec<String>>,
     previews: HashMap<String, PreviewEntry>,
     image_context: Option<EditorContext>,
+    pdf_context: Option<EditorContext>,
     video_context: Option<EditorContext>,
     preview_windows: HashMap<String, LocalFile>,
     settings: Settings,
@@ -373,7 +374,7 @@ impl AppState {
     }
 
     pub fn record_drop(&self, window: &str, paths: &[PathBuf]) -> Result<(), String> {
-        if !["workspace", "wheel"].contains(&window) || paths.len() > 1_000 {
+        if !["workspace", "wheel", "pdf"].contains(&window) || paths.len() > 1_000 {
             return Err("Unsupported drop target or too many files".into());
         }
         let mut accepted = Vec::new();
@@ -772,7 +773,7 @@ pub fn bootstrap(
     window: tauri::WebviewWindow,
     state: State<'_, AppState>,
 ) -> Result<Snapshot, String> {
-    require_window(&window, &["workspace", "wheel"])?;
+    require_window(&window, &["workspace", "wheel", "pdf"])?;
     state.snapshot()
 }
 
@@ -783,7 +784,7 @@ pub async fn inspect_paths(
     paths: Vec<String>,
     recursive: bool,
 ) -> Result<Vec<LocalFile>, String> {
-    require_window(&window, &["workspace", "wheel"])?;
+    require_window(&window, &["workspace", "wheel", "pdf"])?;
     let state = app.state::<AppState>();
     let known = state
         .lock()?
@@ -802,7 +803,7 @@ pub async fn consume_drop(
     app: AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<Vec<LocalFile>, String> {
-    require_window(&window, &["workspace", "wheel"])?;
+    require_window(&window, &["workspace", "wheel", "pdf"])?;
     let state = app.state::<AppState>();
     let paths = state
         .lock()?
@@ -821,7 +822,7 @@ pub async fn choose_files(
     app: AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<Vec<LocalFile>, String> {
-    require_window(&window, &["workspace"])?;
+    require_window(&window, &["workspace", "pdf"])?;
     let dialog_app = app.clone();
     let paths = tauri::async_runtime::spawn_blocking(move || {
         dialog_app.dialog().file().blocking_pick_files()
@@ -1124,7 +1125,7 @@ pub fn reveal(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<Value, String> {
-    require_window(&window, &["workspace", "wheel"])?;
+    require_window(&window, &["workspace", "wheel", "pdf"])?;
     let path = state.known_path(&path, false)?;
     app.opener()
         .reveal_item_in_dir(path)
@@ -1139,7 +1140,7 @@ pub fn open_output(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<Value, String> {
-    require_window(&window, &["workspace", "wheel"])?;
+    require_window(&window, &["workspace", "wheel", "pdf"])?;
     let path = state.known_path(&path, true)?;
     app.opener()
         .open_path(path.to_string_lossy().to_string(), None::<&str>)
@@ -1198,6 +1199,17 @@ fn schedule_job(app: AppHandle, id: String) -> Result<(), String> {
         match result {
             Ok(Some(output)) => {
                 let _ = state.update_job(&app, &id, "completed", Some(output), None);
+                if let Ok(data) = state.lock() {
+                    if data
+                        .jobs
+                        .iter()
+                        .any(|j| j.id == id && j.operation == "pdf-browser")
+                    {
+                        if let Some(parent) = state.jobs_file.parent() {
+                            let _ = fs::remove_file(parent.join(format!("pdf-{id}.bin")));
+                        }
+                    }
+                }
             }
             Ok(None) => {
                 let _ = state.update_job(&app, &id, "skipped", None, None);
@@ -1259,7 +1271,22 @@ fn run_local_job(
     let archive_extract = job.operation == "extract";
     let pdf_job = input_ext == "pdf";
     let document_job = ["txt", "md", "html", "docx", "epub", "rtf"].contains(&input_ext.as_str());
-    let bytes = if media_category.is_some()
+    let bytes = if job.operation == "pdf-browser" {
+        let id = job.options["artifact"]
+            .as_str()
+            .ok_or("Missing PDF artifact")?;
+        Uuid::parse_str(id).map_err(|_| "Invalid artifact")?;
+        Some(
+            fs::read(
+                app.state::<AppState>()
+                    .jobs_file
+                    .parent()
+                    .ok_or("Missing data directory")?
+                    .join(format!("pdf-{id}.bin")),
+            )
+            .map_err(|e| e.to_string())?,
+        )
+    } else if media_category.is_some()
         || archive_create
         || archive_extract
         || pdf_job
@@ -2346,6 +2373,18 @@ pub struct EditorRequest {
     options: Value,
 }
 
+fn editor_accepts_file(capability: &Value, file: &LocalFile) -> bool {
+    !file.is_directory.unwrap_or(false)
+        && capability["category"].as_str() == Some(file.category.as_str())
+        && capability["inputs"].as_array().is_some_and(|inputs| {
+            inputs.iter().any(|input| {
+                input
+                    .as_str()
+                    .is_some_and(|ext| ext == "*" || ext.eq_ignore_ascii_case(&file.ext))
+            })
+        })
+}
+
 fn editor_context(
     state: &AppState,
     request: EditorRequest,
@@ -2388,12 +2427,8 @@ fn editor_context(
             .find(|file| file.path == path)
             .cloned()
             .ok_or("Inspect editor files first")?;
-        if file.category != category
-            || !capability["inputs"]
-                .as_array()
-                .is_some_and(|inputs| inputs.iter().any(|input| input == &file.ext))
-        {
-            return Err("Editor operation does not support a selected file".into());
+        if !editor_accepts_file(&capability, &file) {
+            return Err(format!("This {} tool cannot edit the selected {} file ({}). Select a supported file of the same type.", category, file.category, file.ext));
         }
         if !seen.insert(path) {
             return Err("Duplicate editor file".into());
@@ -2416,7 +2451,7 @@ pub fn open_image_tool(
     state: State<'_, AppState>,
     request: EditorRequest,
 ) -> Result<Value, String> {
-    require_window(&window, &["workspace", "wheel"])?;
+    require_window(&window, &["workspace", "wheel", "pdf"])?;
     let context = editor_context(&state, request, "image")?;
     state.lock()?.image_context = Some(context.clone());
     let window = app
@@ -2435,7 +2470,7 @@ pub fn open_video_tool(
     state: State<'_, AppState>,
     request: EditorRequest,
 ) -> Result<Value, String> {
-    require_window(&window, &["workspace", "wheel"])?;
+    require_window(&window, &["workspace", "wheel", "pdf"])?;
     let context = editor_context(&state, request, "video")?;
     state.lock()?.video_context = Some(context.clone());
     let window = app
@@ -2724,12 +2759,46 @@ pub fn select_global_operation(
     let category = capability["category"]
         .as_str()
         .ok_or("Invalid capability")?;
-    let files = request
-        .files
-        .iter()
-        .map(|file| file.path.clone())
-        .collect::<Vec<_>>();
-    if category == "image" || category == "video" {
+    // Resolve against inspected files, using the same compatibility rule as the editor.
+    // A mixed drag may contain files for several families; only pass matching files.
+    let files = {
+        let data = state.lock()?;
+        request
+            .files
+            .iter()
+            .map(|incoming| {
+                data.files
+                    .iter()
+                    .find(|known| known.path == incoming.path)
+                    .ok_or("Inspect editor files first")
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .filter(|file| editor_accepts_file(&capability, file))
+            .map(|file| file.path.clone())
+            .collect::<Vec<_>>()
+    };
+    if category == "pdf" && capability["operation"] != "convert" {
+        let context = editor_context(
+            &state,
+            EditorRequest {
+                capability_id: request.capability_id.clone(),
+                files,
+                format: request.format.clone(),
+                options: serde_json::json!({}),
+            },
+            "pdf",
+        )?;
+        state.lock()?.pdf_context = Some(context.clone());
+        window.hide().map_err(|e| e.to_string())?;
+        let editor = app
+            .get_webview_window("pdf")
+            .ok_or("PDF popup is unavailable")?;
+        app.emit_to("pdf", "santra:pdf-context", &context)
+            .map_err(|e| e.to_string())?;
+        editor.show().map_err(|e| e.to_string())?;
+        editor.set_focus().map_err(|e| e.to_string())?;
+    } else if category == "image" || category == "video" {
         let editor = EditorRequest {
             capability_id: request.capability_id,
             files,
@@ -2778,6 +2847,11 @@ pub fn finish_global_wheel(
         return Err("Invalid wheel notice".into());
     }
     window.hide().map_err(|error| error.to_string())?;
+    if page == "background" {
+        if let Some(message) = notice.as_ref() {
+            app.dialog().message(message).title("Santra").show(|_| {});
+        }
+    }
     if page != "background" {
         let workspace = app
             .get_webview_window("workspace")
@@ -3091,6 +3165,62 @@ mod tests {
     }
 
     #[test]
+    fn all_pdf_popups_accept_inspected_pdfs_and_reject_other_files() {
+        let directory =
+            std::env::temp_dir().join(format!("santra-editor-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("DOCUMENT.PDF");
+        std::fs::write(&path, b"%PDF-1.7\n").unwrap();
+        let files = super::inspect_all(vec![path.to_string_lossy().into()], false).unwrap();
+        let state = AppState {
+            data: Mutex::new(Data {
+                files: files.clone(),
+                ..Data::default()
+            }),
+            wheel_mode: Mutex::new("tools".into()),
+            semaphore: Mutex::new(Arc::new(Semaphore::new(1))),
+            media: Mutex::new(crate::media::MediaBackend::default()),
+            pdf: Mutex::new(crate::pdf::PdfBackend::default()),
+            documents: Mutex::new(crate::documents::DocumentBackend::default()),
+            settings_file: directory.join("settings.json"),
+            jobs_file: directory.join("jobs.json"),
+        };
+        let routes = crate::pdf::PdfBackend::default().capabilities();
+        assert_eq!(routes.len(), 9);
+        for route in routes {
+            let context = editor_context(
+                &state,
+                EditorRequest {
+                    capability_id: route["id"].as_str().unwrap().into(),
+                    files: vec![files[0].path.clone()],
+                    format: "pdf".into(),
+                    options: serde_json::json!({}),
+                },
+                "pdf",
+            )
+            .unwrap();
+            assert_eq!(context.files, files);
+
+            assert!(
+                super::editor_accepts_file(&route, &files[0]),
+                "{}",
+                route["id"]
+            );
+            let mut incompatible = files[0].clone();
+            incompatible.category = "image".into();
+            incompatible.ext = "png".into();
+            assert!(!super::editor_accepts_file(&route, &incompatible));
+            let selection = [incompatible, files[0].clone()];
+            let accepted = selection
+                .iter()
+                .filter(|file| super::editor_accepts_file(&route, file))
+                .collect::<Vec<_>>();
+            assert_eq!(accepted, vec![&files[0]]);
+        }
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn classified_extensions_cover_all_reference_families() {
         for (extension, expected) in [
             ("mkv", "video"),
@@ -3208,4 +3338,94 @@ mod tests {
         assert_eq!(second.file_name().unwrap(), "report (3).txt");
         std::fs::remove_dir_all(directory).unwrap();
     }
+}
+
+#[tauri::command]
+pub fn pdf_context(state: State<'_, AppState>) -> Result<Value, String> {
+    serde_json::to_value(state.lock()?.pdf_context.clone()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn read_pdf(state: State<'_, AppState>, path: String) -> Result<String, String> {
+    let path = state.known_path(&path, false)?;
+    if !check_no_symlink(&path)?.is_file()
+        || fs::metadata(&path).map_err(|e| e.to_string())?.len() > 100 * 1024 * 1024
+    {
+        return Err("PDF exceeds safety limits".into());
+    }
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    if !bytes.starts_with(b"%PDF-") {
+        return Err("Invalid PDF signature".into());
+    }
+    Ok(STANDARD.encode(bytes))
+}
+
+#[tauri::command]
+pub fn save_pdf_output(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+    format: String,
+    data: String,
+) -> Result<(), String> {
+    let source = state.known_path(&path, false)?;
+    if !["pdf", "png", "jpeg", "webp", "zip"].contains(&format.as_str()) || data.len() > 180_000_000
+    {
+        return Err("Invalid PDF output".into());
+    }
+    let bytes = STANDARD
+        .decode(data)
+        .map_err(|_| "Invalid output encoding")?;
+    let valid = match format.as_str() {
+        "pdf" => bytes.starts_with(b"%PDF-"),
+        "png" => bytes.starts_with(b"\x89PNG"),
+        "jpeg" => bytes.starts_with(&[255, 216]),
+        "webp" => bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP"),
+        "zip" => bytes.starts_with(b"PK"),
+        _ => false,
+    };
+    if !valid {
+        return Err("Output signature does not match its format".into());
+    }
+    let id = Uuid::new_v4().to_string();
+    let artifact = state
+        .jobs_file
+        .parent()
+        .ok_or("Missing data directory")?
+        .join(format!("pdf-{id}.bin"));
+    let mut output = OpenOptions::new();
+    output.write(true).create_new(true);
+    #[cfg(unix)]
+    output.mode(0o600);
+    output
+        .open(&artifact)
+        .map_err(|e| e.to_string())?
+        .write_all(&bytes)
+        .map_err(|e| e.to_string())?;
+    let job = Job {
+        id: id.clone(),
+        input: path,
+        name: source
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string(),
+        operation: "pdf-browser".into(),
+        format,
+        status: "queued".into(),
+        progress: 0,
+        output: None,
+        error: None,
+        created_at: OffsetDateTime::now_utc()
+            .format(&Rfc3339)
+            .map_err(|e| e.to_string())?,
+        options: serde_json::json!({"artifact":id}),
+    };
+    {
+        let mut data = state.lock()?;
+        data.jobs.push(job);
+        persist_json(&state.jobs_file, &data.jobs)?;
+    }
+    schedule_job(app, id)?;
+    Ok(())
 }

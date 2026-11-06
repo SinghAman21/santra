@@ -36,3 +36,25 @@ Penpot frames 02–10 now share the rounded white wheel, family-specific icons/o
 Office conversion and proposal-only tools remain disabled. Phase 8 real Explorer/GNOME drag, focus, and packaging verification requirements remain open.
 
 Wheel placement follow-up: native rings and unknown-file cards are centered in the host so the opening drag cursor immediately falls inside. Workspace placement measures actual ring geometry and clamps the whole panel; it does not follow the pointer while choosing. Configured native dimensions avoid zero-size startup placement, and target-monitor scaling/work-area bounds are included. Geometry tests do not replace manual real GNOME/Explorer drag validation.
+
+
+### Local PDF popup tools (November 2026)
+
+The capability registry exposes Organize, Merge, Split, Extract, Insert, Compress,
+Redact, Metadata, and Export Pages in that wheel order. All use the shared
+Audio/Image `ReferenceEditor` popup shell. Native wheel activation uses a compact
+PDF popup host without focusing the workspace; deliberate workspace activation
+uses the same editor as a modal. PNG/JPEG are page-export options, not separate
+PDF wheel conversions. PDF.js renders lazy page thumbnails with a bundled worker;
+pdf-lib edits documents and fflate bundles multiple outputs. No remote resources
+or uploads are used. Native outputs enter the local job system with existing
+collision handling; browser outputs download directly.
+
+Compression rebuilds pages as JPEGs and can increase file size. Secure redaction
+requires confirmation and rebuilds every page as PNG pixels, discarding text,
+vectors, attachments, annotations and document metadata. Both retain displayed
+page dimensions and orientation. Inputs are bounded to 100 MB and 2,000 pages;
+individual rendering is limited to 32 megapixels. Password-protected documents
+are rejected. Real Windows/GNOME file-manager drag validation remains manual.
+
+Native editor handoff filters mixed selections against the selected capability using inspected file metadata, matching editor validation. Unsupported files do not block compatible files from opening a tool.

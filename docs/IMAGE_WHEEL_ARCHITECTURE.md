@@ -259,3 +259,25 @@ The global wheel no longer assumes an image when the OS has not exposed file det
 ## Cursor-centered wheel placement
 
 The native ring now shares the undecorated host window's center; headings, source captions, and pagination do not offset it. Native placement uses the configured size at the target monitor's scale, including when a hidden window reports zero dimensions on startup, and clamps the host to that monitor's work area. The workspace fallback measures the rendered ring rather than using fixed offsets, anchors it at the cursor that opened it, and keeps it stationary while selecting. Screen-edge clamping may shift the center. Unknown-file cards use the same center so drag-enter detection can begin without moving to a distant panel.
+
+
+### Local PDF popup tools (November 2026)
+
+The capability registry exposes Organize, Merge, Split, Extract, Insert, Compress,
+Redact, Metadata, and Export Pages in that wheel order. All use the shared
+Audio/Image `ReferenceEditor` popup shell. Native wheel activation uses a compact
+PDF popup host without focusing the workspace; deliberate workspace activation
+uses the same editor as a modal. PNG/JPEG are page-export options, not separate
+PDF wheel conversions. PDF.js renders lazy page thumbnails with a bundled worker;
+pdf-lib edits documents and fflate bundles multiple outputs. No remote resources
+or uploads are used. Native outputs enter the local job system with existing
+collision handling; browser outputs download directly.
+
+Compression rebuilds pages as JPEGs and can increase file size. Secure redaction
+requires confirmation and rebuilds every page as PNG pixels, discarding text,
+vectors, attachments, annotations and document metadata. Both retain displayed
+page dimensions and orientation. Inputs are bounded to 100 MB and 2,000 pages;
+individual rendering is limited to 32 megapixels. Password-protected documents
+are rejected. Real Windows/GNOME file-manager drag validation remains manual.
+
+Native editor handoff filters mixed selections against the selected capability using inspected file metadata, matching editor validation. Unsupported files do not block compatible files from opening a tool.

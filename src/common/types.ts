@@ -8,6 +8,7 @@ export interface Snapshot { files: LocalFile[]; jobs: Job[]; settings: Settings;
 export interface ImageEditorContext { id?: string; capability: Capability; files: LocalFile[]; format: string; options: Record<string, string> }
 export interface VideoEditorContext { id?: string; capability: Capability; files: LocalFile[]; format: string; options: Record<string, unknown> }
 export interface Bridge {
+  videoTimelineThumbnails?: (request: {start:number;end:number;count:number;width:number}) => Promise<{frames:{time:number;url:string}[]}>;
   bootstrap(): Promise<Snapshot>;
   addFiles(): Promise<LocalFile[]>;
   addFolder(): Promise<LocalFile[]>;

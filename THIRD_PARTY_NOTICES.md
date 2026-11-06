@@ -7,3 +7,12 @@ The app includes Tauri and Rust crates such as `image`, `zip`, `tar`, and `flate
 FFmpeg/FFprobe, Poppler, qpdf, Pandoc, LibreOffice, and ExifTool are optional programs installed separately by the user. Santra does not bundle, download, or update them. Their licenses depend on the local distribution and build, including FFmpeg's codec configuration. Do not infer that every optional route is available from a program name alone.
 
 Before public distribution, inspect each Windows and Linux artifact, preserve required notices and source offers, verify any dynamically linked LGPL component obligations, and make the final inventory available beside the release. `build/dependency-inventory.json` and this summary are evidence inputs, not certification of compliance. The [Phase 8 checklist](docs/TAURI_VALIDATION_CHECKLIST.md) retains this release gate.
+
+
+## Browser PDF tools
+
+- pdf-lib: MIT license, https://github.com/Hopding/pdf-lib
+- PDF.js (pdfjs-dist): Apache-2.0 license, https://github.com/mozilla/pdf.js
+- fflate: MIT license, https://github.com/101arrowz/fflate
+
+These libraries process files locally. PDF.js worker code is bundled with the application.

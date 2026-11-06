@@ -104,10 +104,10 @@ export default function GlobalWheelWindow() {
       .filter(capability => mode !== 'tools' || !(capability.category === 'image' && operationName(capability) === 'strip-metadata'))
       .filter(capability => !selectedCategories.size || selectedCategories.has(capability.category))
       .filter(capability => mode === 'convert'
-        ? ['convert', 'render', 'create-archive'].includes(operationName(capability))
-        : !['convert', 'render', 'create-archive'].includes(operationName(capability)))
+        ? ['convert', 'create-archive'].includes(operationName(capability))
+        : !['convert', 'create-archive'].includes(operationName(capability)))
       .filter(capability => externalFiles.some(file => supports(capability, file)))
-      .filter(capability => !['merge', 'pdf-merge'].includes(operationName(capability)) || externalFiles.filter(file => supports(capability, file)).length > 1)
+      .filter(capability => !['merge'].includes(operationName(capability)) || externalFiles.filter(file => supports(capability, file)).length > 1)
       .flatMap(capability => (mode === 'convert' ? capability.outputs : ['']).map(format => {
         const coverage = externalFiles.filter(file => supports(capability, file)).length;
         const operation = operationName(capability);
@@ -138,7 +138,7 @@ export default function GlobalWheelWindow() {
     try {
       const selectedChoice = targetChoice === undefined ? choiceRef.current : acceptedTarget;
       if (!selectedChoice) {
-        await api.handoffGlobalFiles?.({ files: incoming, mode });
+        await api.finishGlobalWheel?.('background');
         return;
       }
       if (mode === 'actions') {
@@ -151,10 +151,10 @@ export default function GlobalWheelWindow() {
       const [capabilityId, format] = selectedChoice.split('|');
       const capability = capabilities.find(item => item.id === capabilityId && item.available && incoming.some(file => supports(item, file)));
       if (!capability) {
-        await api.handoffGlobalFiles?.({ files: incoming, mode });
+        await api.finishGlobalWheel?.('background');
         return;
       }
-      if (['convert', 'render', 'create-archive'].includes(operationName(capability))) {
+      if (['convert', 'create-archive'].includes(operationName(capability))) {
         const settings = snapshot.settings;
         await api.enqueue({
           files: incoming,
@@ -177,11 +177,8 @@ export default function GlobalWheelWindow() {
         await api.finishGlobalWheel?.('background');
         return;
       }
-      try {
-        await api.handoffGlobalFiles?.({ files: incoming, mode, notice: noticeText(`Could not start the selected operation: ${message}`) });
-      } catch {
-        setFailure(message);
-      }
+      setFailure(message);
+      await api.finishGlobalWheel?.('background', noticeText(message));
     } finally {
       processing.current = false;
     }
@@ -196,14 +193,14 @@ export default function GlobalWheelWindow() {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setFailure(message);
-      await api.finishGlobalWheel?.('converter', noticeText(`Could not inspect dropped files: ${message}`));
+      await api.finishGlobalWheel?.('background', noticeText(`Could not inspect dropped files: ${message}`));
     }
   }
 
   nativeDropHandler.current = (files, position) => { void processIncoming(files, position ? itemAt(position.x, position.y) : undefined); };
   useEffect(() => api.onNativeDrop?.((files, position) => nativeDropHandler.current(files, position), message => {
     setFailure(message);
-    void api.finishGlobalWheel?.('converter', noticeText(`Could not inspect dropped files: ${message}`));
+    void api.finishGlobalWheel?.('background', noticeText(`Could not inspect dropped files: ${message}`));
   }), []);
   nativeOverHandler.current = position => {
     const pager=document.elementFromPoint(position.x,position.y)?.closest<HTMLButtonElement>('button[data-wheel-page]');
