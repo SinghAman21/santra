@@ -16,3 +16,8 @@ Before public distribution, inspect each Windows and Linux artifact, preserve re
 - fflate: MIT license, https://github.com/101arrowz/fflate
 
 These libraries process files locally. PDF.js worker code is bundled with the application.
+
+
+## Spreadsheet processing
+
+SheetJS Community Edition 0.20.3 (`xlsx`), Apache-2.0. Official distribution: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz. License is bundled as `licenses/SheetJS-LICENSE.txt`. All workbook processing is local; no SheetJS online service is contacted at runtime.

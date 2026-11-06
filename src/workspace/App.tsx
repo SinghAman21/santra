@@ -1,3 +1,4 @@
+import SpreadsheetEditor from '../tools/spreadsheet/SpreadsheetEditor';
 import { hintedFiles as dragHints, wheelFamily } from '../common/file-kind';
 import { performFileAction } from '../action';
 import { enqueueLocalOperation } from '../convert/common/queue';
@@ -39,6 +40,7 @@ function formatSize(size: number) { return size < 1024 ? `${size} B` : size < 10
 function Orange({ className = '', sliced = false }: { className?: string; sliced?: boolean }) { return <img className={`santra-logo ${sliced ? 'santra-logo--illustration' : ''} ${className}`} src="./santra.png" alt="" aria-hidden="true"/>; }
 function FileIcon({ file }: { file: LocalFile }) { const family = families.find(item => item.id === file.category); const Icon = file.isDirectory ? Folder : family?.icon || File; return <span className={`file-icon ${family?.color || 'sand'}`}><Icon size={23}/></span>; }
 export default function App() {
+  const [sheetEditor,setSheetEditor]=useState<{id:string;capability:Capability;files:LocalFile[];format:string}|null>(null);
   const [conversionEditor, setConversionEditor] = useState<{capability:Capability;files:LocalFile[];format:string;options:Record<string,string>}|null>(null);
   const [archiveEditor, setArchiveEditor] = useState<{capability:Capability;files:LocalFile[];format:string;options:Record<string,string>}|null>(null);
   const [audioEditor, setAudioEditor] = useState<{capability:Capability;files:LocalFile[];format:string;options:Record<string,string>}|null>(null);
@@ -159,7 +161,7 @@ export default function App() {
     const routes = validRoutes(tab, source).flatMap(cap => (tab === 'convert' ? cap.outputs : ['']).map(format => {
       const count = source.filter(file => compatible(cap, file)).length;
       const Icon = toolIcons[operationName(cap)] || WandSparkles;
-      return { id: `${cap.id}|${format}`, label: tab === 'convert' ? format.toUpperCase() : toolLabels[operationName(cap)] || cap.label, detail: count === source.length ? `${count} ${count === 1 ? 'file' : 'files'} · Processed locally` : `${count} of ${source.length} files · Others will be skipped`, icon: tab === 'tools' ? <Icon size={19}/> : undefined };
+      return { id: `${cap.id}|${format}`, label: tab === 'convert' ? (cap.category==='spreadsheet' && format==='pdf'?'PDF · layout-limited':format.toUpperCase()) : toolLabels[operationName(cap)] || cap.label, detail: count === source.length ? `${count} ${count === 1 ? 'file' : 'files'} · Processed locally` : `${count} of ${source.length} files · Others will be skipped`, icon: tab === 'tools' ? <Icon size={19}/> : undefined };
     }));
     return [...new Map(routes.map(item => [item.label, item])).values()];
   }
@@ -179,7 +181,8 @@ export default function App() {
     const skipped = source.filter(file => !compatible(cap, file)).length;
     const normalized = { ...cap, id, operation: id, warning: skipped ? `${skipped} selected ${skipped === 1 ? 'file does' : 'files do'} not support this operation and will be recorded as skipped. ${cap.warning || ''}` : cap.warning };
     setOperation(normalized); setOutputFormat(target); setPicker(null); setOptions(nextOptions); setPage('converter');
-    if (id === 'convert' && ['document','presentation','spreadsheet','subtitle'].includes(cap.category)) setConversionEditor({capability:normalized,files:source.filter(file=>compatible(cap,file)),format:target,options:nextOptions});
+    if(cap.category==='spreadsheet')setSheetEditor({id:crypto.randomUUID(),capability:normalized,files:source.filter(file=>compatible(cap,file)),format:target});
+    else if (id === 'convert' && ['document','presentation','spreadsheet','subtitle'].includes(cap.category)) setConversionEditor({capability:normalized,files:source.filter(file=>compatible(cap,file)),format:target,options:nextOptions});
     else if (cap.category === 'archive') setArchiveEditor({capability:normalized,files:source.filter(file=>compatible(cap,file)),format:target,options:nextOptions});
     else if (cap.category === 'audio' && audioEditorOperations.includes(id)) setAudioEditor({capability:normalized,files:source.filter(file=>compatible(cap,file)),format:target,options:nextOptions});
     else if (cap.category === 'pdf') setPdfEditor({ capability: normalized, files: source, format: target, options: nextOptions });
@@ -326,6 +329,7 @@ export default function App() {
       }}>{picker === 'actions' ? actionItems.map(item => <button className="operation-choice" key={item.id} onClick={() => void fileAction(item.id)}><span className="tool-icon sand"><item.icon size={21}/></span><span><strong>{item.label}</strong><small>{item.id === 'preview' ? 'Always-on-top local preview' : 'Local file action'}</small></span><ChevronRight size={17}/></button>) : validRoutes(picker).length ? validRoutes(picker).flatMap(cap => (picker === 'convert' ? cap.outputs : ['']).map(format => <button className="operation-choice" key={`${cap.id}-${cap.backend}-${format}-${cap.category}`} onClick={() => pickRoute(cap, format || undefined)}><span className="tool-icon peach">{picker === 'convert' ? <File size={21}/> : <WandSparkles size={21}/>}</span><span><strong>{picker === 'convert' ? `${cap.label} · ${format.toUpperCase()}` : cap.label}</strong><small>{selectedFiles.filter(file => compatible(cap, file)).length} of {selectedFiles.length} files · {cap.backend}{cap.warning ? ' · Review fidelity warning' : ' · Processed locally'}</small></span><ChevronRight size={17}/></button>)) : <div className="picker-empty"><Package size={32}/><h3>{t.noRoutes}</h3><p>{!isDesktop ? t.previewNotice : t.noRoutesHint}</p><button className="button" onClick={() => { setPicker(null); setPage('settings'); setSettingsTab('engines'); }}>{t.viewSettings}<ArrowRight size={15}/></button></div>}</div>
       <footer className="picker-footer"><span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span><span><kbd>Enter</kbd> Choose</span><span><kbd>Esc</kbd> Close</span></footer>
     </Modal>}
+    {sheetEditor && <SpreadsheetEditor context={sheetEditor} onClose={()=>setSheetEditor(null)}/>}
     {conversionEditor && <ConversionWindow {...conversionEditor} initialOptions={conversionEditor.options} onClose={()=>setConversionEditor(null)} onApply={(format,values)=>queueOperation(conversionEditor.capability,format,values,conversionEditor.files)}/>}
     {archiveEditor && <ArchiveWindow {...archiveEditor} initialOptions={archiveEditor.options} onClose={()=>setArchiveEditor(null)} onApply={(format,values)=>queueOperation(archiveEditor.capability,format,values,archiveEditor.files)}/>}
     {audioEditor && <AudioToolWindow {...audioEditor} initialOptions={audioEditor.options} onClose={()=>setAudioEditor(null)} onApply={(format,values)=>queueOperation(audioEditor.capability,format,values,audioEditor.files)}/>}

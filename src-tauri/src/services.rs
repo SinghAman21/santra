@@ -130,6 +130,7 @@ struct Data {
     previews: HashMap<String, PreviewEntry>,
     image_context: Option<EditorContext>,
     pdf_context: Option<EditorContext>,
+    spreadsheet_context: Option<Value>,
     video_context: Option<EditorContext>,
     preview_windows: HashMap<String, LocalFile>,
     settings: Settings,
@@ -309,6 +310,7 @@ impl AppState {
         capabilities.extend(crate::archives::capabilities());
         capabilities.extend(media.capabilities());
         capabilities.extend(pdf.capabilities());
+        capabilities.extend(spreadsheet_capabilities());
         capabilities.extend(documents.capabilities());
         let mut backends = HashMap::from([
             (
@@ -374,7 +376,7 @@ impl AppState {
     }
 
     pub fn record_drop(&self, window: &str, paths: &[PathBuf]) -> Result<(), String> {
-        if !["workspace", "wheel", "pdf"].contains(&window) || paths.len() > 1_000 {
+        if !["workspace", "wheel", "pdf", "spreadsheet"].contains(&window) || paths.len() > 1_000 {
             return Err("Unsupported drop target or too many files".into());
         }
         let mut accepted = Vec::new();
@@ -576,6 +578,19 @@ fn check_no_symlink(path: &Path) -> Result<fs::Metadata, String> {
     Ok(metadata)
 }
 
+fn spreadsheet_capabilities() -> Vec<Value> {
+    ["convert", "split", "strip-metadata"].iter().map(|operation| {
+        serde_json::json!({
+            "id": format!("spreadsheet:{operation}"), "operation": operation,
+            "label": match *operation { "strip-metadata" => "Delete metadata", "split" => "Split worksheets", _ => "Convert spreadsheet" },
+            "category": "spreadsheet", "inputs": ["xlsx", "xls", "ods", "csv", "tsv"],
+            "outputs": if *operation == "convert" { vec!["xlsx", "xls", "ods", "csv", "tsv", "pdf"] } else { vec!["xlsx", "xls", "ods", "csv", "tsv"] },
+            "backend": "sheetjs", "available": true, "batch": false, "preservesMetadata": false, "options": {},
+            "warning": "SheetJS rewrite may lose unsupported parts, macros, external links, charts and formatting. PDF output is layout-limited."
+        })
+    }).collect()
+}
+
 fn category(ext: &str) -> &'static str {
     match ext {
         "jpg" | "jpeg" | "png" | "webp" | "heic" | "heif" | "tiff" | "tif" | "avif" | "bmp"
@@ -773,7 +788,7 @@ pub fn bootstrap(
     window: tauri::WebviewWindow,
     state: State<'_, AppState>,
 ) -> Result<Snapshot, String> {
-    require_window(&window, &["workspace", "wheel", "pdf"])?;
+    require_window(&window, &["workspace", "wheel", "pdf", "spreadsheet"])?;
     state.snapshot()
 }
 
@@ -784,7 +799,7 @@ pub async fn inspect_paths(
     paths: Vec<String>,
     recursive: bool,
 ) -> Result<Vec<LocalFile>, String> {
-    require_window(&window, &["workspace", "wheel", "pdf"])?;
+    require_window(&window, &["workspace", "wheel", "pdf", "spreadsheet"])?;
     let state = app.state::<AppState>();
     let known = state
         .lock()?
@@ -803,7 +818,7 @@ pub async fn consume_drop(
     app: AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<Vec<LocalFile>, String> {
-    require_window(&window, &["workspace", "wheel", "pdf"])?;
+    require_window(&window, &["workspace", "wheel", "pdf", "spreadsheet"])?;
     let state = app.state::<AppState>();
     let paths = state
         .lock()?
@@ -822,7 +837,7 @@ pub async fn choose_files(
     app: AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<Vec<LocalFile>, String> {
-    require_window(&window, &["workspace", "pdf"])?;
+    require_window(&window, &["workspace", "pdf", "spreadsheet"])?;
     let dialog_app = app.clone();
     let paths = tauri::async_runtime::spawn_blocking(move || {
         dialog_app.dialog().file().blocking_pick_files()
@@ -1125,7 +1140,7 @@ pub fn reveal(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<Value, String> {
-    require_window(&window, &["workspace", "wheel", "pdf"])?;
+    require_window(&window, &["workspace", "wheel", "pdf", "spreadsheet"])?;
     let path = state.known_path(&path, false)?;
     app.opener()
         .reveal_item_in_dir(path)
@@ -1140,7 +1155,7 @@ pub fn open_output(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<Value, String> {
-    require_window(&window, &["workspace", "wheel", "pdf"])?;
+    require_window(&window, &["workspace", "wheel", "pdf", "spreadsheet"])?;
     let path = state.known_path(&path, true)?;
     app.opener()
         .open_path(path.to_string_lossy().to_string(), None::<&str>)
@@ -1200,11 +1215,10 @@ fn schedule_job(app: AppHandle, id: String) -> Result<(), String> {
             Ok(Some(output)) => {
                 let _ = state.update_job(&app, &id, "completed", Some(output), None);
                 if let Ok(data) = state.lock() {
-                    if data
-                        .jobs
-                        .iter()
-                        .any(|j| j.id == id && j.operation == "pdf-browser")
-                    {
+                    if data.jobs.iter().any(|j| {
+                        j.id == id
+                            && ["pdf-browser", "sheet-browser"].contains(&j.operation.as_str())
+                    }) {
                         if let Some(parent) = state.jobs_file.parent() {
                             let _ = fs::remove_file(parent.join(format!("pdf-{id}.bin")));
                         }
@@ -1271,7 +1285,7 @@ fn run_local_job(
     let archive_extract = job.operation == "extract";
     let pdf_job = input_ext == "pdf";
     let document_job = ["txt", "md", "html", "docx", "epub", "rtf"].contains(&input_ext.as_str());
-    let bytes = if job.operation == "pdf-browser" {
+    let bytes = if ["pdf-browser", "sheet-browser"].contains(&job.operation.as_str()) {
         let id = job.options["artifact"]
             .as_str()
             .ok_or("Missing PDF artifact")?;
@@ -1330,6 +1344,10 @@ fn run_local_job(
             .and_then(Value::as_u64)
             .ok_or("Missing split segment index")?;
         base.push_str(&format!("-part-{index:03}"));
+    }
+    if let Some(suffix) = job.options["sheetSuffix"].as_str() {
+        base.push('-');
+        base.push_str(suffix);
     }
     if base.is_empty()
         || base.len() > 240
@@ -2451,7 +2469,7 @@ pub fn open_image_tool(
     state: State<'_, AppState>,
     request: EditorRequest,
 ) -> Result<Value, String> {
-    require_window(&window, &["workspace", "wheel", "pdf"])?;
+    require_window(&window, &["workspace", "wheel", "pdf", "spreadsheet"])?;
     let context = editor_context(&state, request, "image")?;
     state.lock()?.image_context = Some(context.clone());
     let window = app
@@ -2470,7 +2488,7 @@ pub fn open_video_tool(
     state: State<'_, AppState>,
     request: EditorRequest,
 ) -> Result<Value, String> {
-    require_window(&window, &["workspace", "wheel", "pdf"])?;
+    require_window(&window, &["workspace", "wheel", "pdf", "spreadsheet"])?;
     let context = editor_context(&state, request, "video")?;
     state.lock()?.video_context = Some(context.clone());
     let window = app
@@ -2778,7 +2796,38 @@ pub fn select_global_operation(
             .map(|file| file.path.clone())
             .collect::<Vec<_>>()
     };
-    if category == "pdf" && capability["operation"] != "convert" {
+    if category == "spreadsheet" {
+        if files.len() != 1 {
+            return Err("Select one compatible workbook at a time".into());
+        }
+        if !capability["outputs"]
+            .as_array()
+            .is_some_and(|outputs| outputs.iter().any(|v| v == &request.format))
+        {
+            return Err("Unsupported spreadsheet output".into());
+        }
+        let selected = {
+            let data = state.lock()?;
+            data.files
+                .iter()
+                .filter(|f| files.contains(&f.path))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let automatic = capability["operation"] == "convert";
+        let context = serde_json::json!({"id":Uuid::new_v4().to_string(),"capability":capability,"files":selected,"format":request.format,"automatic":automatic});
+        state.lock()?.spreadsheet_context = Some(context.clone());
+        window.hide().map_err(|e| e.to_string())?;
+        let editor = app
+            .get_webview_window("spreadsheet")
+            .ok_or("Spreadsheet popup is unavailable")?;
+        app.emit_to("spreadsheet", "santra:sheet-context", &context)
+            .map_err(|e| e.to_string())?;
+        if !automatic {
+            editor.show().map_err(|e| e.to_string())?;
+            editor.set_focus().map_err(|e| e.to_string())?;
+        }
+    } else if category == "pdf" && capability["operation"] != "convert" {
         let context = editor_context(
             &state,
             EditorRequest {
@@ -3221,6 +3270,43 @@ mod tests {
     }
 
     #[test]
+    fn spreadsheet_registry_accepts_only_declared_inputs_and_tools() {
+        let routes = spreadsheet_capabilities();
+        assert_eq!(routes.len(), 3);
+        assert_eq!(
+            routes
+                .iter()
+                .map(|r| r["operation"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            vec!["convert", "split", "strip-metadata"]
+        );
+        for route in routes {
+            for ext in ["xlsx", "xls", "ods", "csv", "tsv"] {
+                let file = LocalFile {
+                    id: "sheet".into(),
+                    path: "/tmp/workbook".into(),
+                    name: "workbook".into(),
+                    size: 1,
+                    ext: ext.into(),
+                    category: "spreadsheet".into(),
+                    is_directory: None,
+                };
+                assert!(editor_accepts_file(&route, &file));
+                let mut unsupported = file;
+                unsupported.ext = "xlsm".into();
+                assert!(!editor_accepts_file(&route, &unsupported));
+            }
+            assert_eq!(
+                route["outputs"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&serde_json::json!("pdf")),
+                route["operation"] == "convert"
+            );
+        }
+    }
+
+    #[test]
     fn classified_extensions_cover_all_reference_families() {
         for (extension, expected) in [
             ("mkv", "video"),
@@ -3368,8 +3454,26 @@ pub fn save_pdf_output(
     format: String,
     data: String,
 ) -> Result<(), String> {
+    save_local_output(app, state, path, format, data, None, false)
+}
+
+fn save_local_output(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+    format: String,
+    data: String,
+    suffix: Option<String>,
+    spreadsheet: bool,
+) -> Result<(), String> {
     let source = state.known_path(&path, false)?;
-    if !["pdf", "png", "jpeg", "webp", "zip"].contains(&format.as_str()) || data.len() > 180_000_000
+    if !(if spreadsheet {
+        &["xlsx", "xls", "ods", "csv", "tsv", "pdf"][..]
+    } else {
+        &["pdf", "png", "jpeg", "webp", "zip"][..]
+    })
+    .contains(&format.as_str())
+        || data.len() > 180_000_000
     {
         return Err("Invalid PDF output".into());
     }
@@ -3381,7 +3485,9 @@ pub fn save_pdf_output(
         "png" => bytes.starts_with(b"\x89PNG"),
         "jpeg" => bytes.starts_with(&[255, 216]),
         "webp" => bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP"),
-        "zip" => bytes.starts_with(b"PK"),
+        "zip" | "xlsx" | "ods" => bytes.starts_with(b"PK"),
+        "xls" => bytes.starts_with(&[208, 207, 17, 224]),
+        "csv" | "tsv" => std::str::from_utf8(&bytes).is_ok(),
         _ => false,
     };
     if !valid {
@@ -3410,7 +3516,12 @@ pub fn save_pdf_output(
             .unwrap_or_default()
             .to_string_lossy()
             .to_string(),
-        operation: "pdf-browser".into(),
+        operation: if spreadsheet {
+            "sheet-browser"
+        } else {
+            "pdf-browser"
+        }
+        .into(),
         format,
         status: "queued".into(),
         progress: 0,
@@ -3419,7 +3530,7 @@ pub fn save_pdf_output(
         created_at: OffsetDateTime::now_utc()
             .format(&Rfc3339)
             .map_err(|e| e.to_string())?,
-        options: serde_json::json!({"artifact":id}),
+        options: serde_json::json!({"artifact":id,"sheetSuffix":suffix.map(|name| name.chars().map(|c| if c.is_alphanumeric() || c=='-' || c=='_' {c} else {'_'}).take(60).collect::<String>())}),
     };
     {
         let mut data = state.lock()?;
@@ -3428,4 +3539,48 @@ pub fn save_pdf_output(
     }
     schedule_job(app, id)?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn spreadsheet_context(state: State<'_, AppState>) -> Result<Option<Value>, String> {
+    Ok(state.lock()?.spreadsheet_context.clone())
+}
+#[tauri::command]
+pub fn read_spreadsheet(state: State<'_, AppState>, path: String) -> Result<String, String> {
+    let source = state.known_path(&path, false)?;
+    let metadata = check_no_symlink(&source)?;
+    if !metadata.is_file() || metadata.len() > 32 * 1024 * 1024 {
+        return Err("Choose a workbook no larger than 32 MB".into());
+    }
+    if !["xlsx", "xls", "ods", "csv", "tsv"].contains(
+        &source
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_ascii_lowercase()
+            .as_str(),
+    ) {
+        return Err("Unsupported spreadsheet input".into());
+    }
+    let mut bytes = Vec::new();
+    File::open(source)
+        .map_err(|e| e.to_string())?
+        .take(32 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    if bytes.len() > 32 * 1024 * 1024 {
+        return Err("Workbook grew beyond the 32 MB limit".into());
+    }
+    Ok(STANDARD.encode(bytes))
+}
+#[tauri::command]
+pub fn save_spreadsheet_output(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+    format: String,
+    data: String,
+    suffix: String,
+) -> Result<(), String> {
+    save_local_output(app, state, path, format, data, Some(suffix), true)
 }

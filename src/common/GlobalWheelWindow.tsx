@@ -111,7 +111,7 @@ export default function GlobalWheelWindow() {
       .flatMap(capability => (mode === 'convert' ? capability.outputs : ['']).map(format => {
         const coverage = externalFiles.filter(file => supports(capability, file)).length;
         const operation = operationName(capability);
-        const label = mode === 'convert' ? format.toUpperCase() : capability.category === 'video' ? videoToolLabels[operation] || capability.label : capability.category === 'image' ? imageToolLabels[operation] || capability.label : operationLabels[operation] || capability.label;
+        const label = mode === 'convert' ? (capability.category==='spreadsheet' && format==='pdf'?'PDF · layout-limited':format.toUpperCase()) : capability.category === 'video' ? videoToolLabels[operation] || capability.label : capability.category === 'image' ? imageToolLabels[operation] || capability.label : operationLabels[operation] || capability.label;
         const Icon = capability.category === 'image' ? imageToolIcons[operation] : operationIcons[operation];
         return [{ id: `${capability.id}|${format}`, label, icon: Icon ? <Icon size={17} aria-hidden="true"/> : undefined, detail: coverage === externalFiles.length ? `${coverage} ${coverage === 1 ? 'file' : 'files'} · Local` : `${coverage} of ${externalFiles.length} files · Others will be skipped` }];
       }))
@@ -154,7 +154,7 @@ export default function GlobalWheelWindow() {
         await api.finishGlobalWheel?.('background');
         return;
       }
-      if (['convert', 'create-archive'].includes(operationName(capability))) {
+      if (capability.category !== 'spreadsheet' && ['convert', 'create-archive'].includes(operationName(capability))) {
         const settings = snapshot.settings;
         await api.enqueue({
           files: incoming,

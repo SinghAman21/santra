@@ -1,3 +1,4 @@
+import SpreadsheetHost from './tools/spreadsheet/SpreadsheetHost';
 import PdfToolHost from './tools/pdf/PdfToolHost';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -17,4 +18,4 @@ const isPreview = new URLSearchParams(window.location.search).get('santra-previe
 if (isGlobalWheel) document.documentElement.classList.add('global-wheel-document');
 if (isImageTool) document.documentElement.classList.add('image-tool-document');
 if (isVideoTool) document.documentElement.classList.add('video-tool-document');
-root.render(<React.StrictMode>{new URLSearchParams(window.location.search).get('santra-pdf-tool') === '1' ? <PdfToolHost /> : isGlobalWheel ? <GlobalWheelWindow /> : isImageTool ? <ImageToolHost /> : isVideoTool ? <VideoToolHost /> : isPreview ? <PreviewHost /> : <App />}</React.StrictMode>);
+root.render(<React.StrictMode>{new URLSearchParams(window.location.search).get('santra-sheet-tool') === '1' ? <SpreadsheetHost /> : new URLSearchParams(window.location.search).get('santra-pdf-tool') === '1' ? <PdfToolHost /> : isGlobalWheel ? <GlobalWheelWindow /> : isImageTool ? <ImageToolHost /> : isVideoTool ? <VideoToolHost /> : isPreview ? <PreviewHost /> : <App />}</React.StrictMode>);

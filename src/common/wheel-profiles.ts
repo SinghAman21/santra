@@ -11,7 +11,7 @@ export const wheelProfiles:Record<WheelFamily,WheelProfile>={
  document:{title:'Document',icon:FileText,formats:['DOCX','MD','TXT','HTML','EPUB'],tools:[],noTools:'No tools available for this file'},
  epub:{title:'EPUB',icon:BookOpen,formats:['DOCX','MD','TXT','HTML','EPUB'],tools:[],noTools:'No tools available for this file'},
  presentation:{title:'Presentation',icon:Layers,formats:['PDF'],tools:[],noTools:'No tools available for this file'},
- spreadsheet:{title:'Spreadsheet',icon:FileSpreadsheet,formats:['XLSX','ODS','CSV','TSV','PDF'],tools:[],noTools:'No tools available for this file'},
+ spreadsheet:{title:'Spreadsheet',icon:FileSpreadsheet,formats:['XLSX','XLS','ODS','CSV','TSV','PDF'],tools:['split','strip-metadata'],noTools:'No tools available for this file'},
  subtitle:{title:'Subtitle',icon:ListVideo,formats:['SRT','VTT','TXT'],tools:[],noTools:'No tools available for this file'},
  other:{title:'File',icon:FileQuestion,formats:[],tools:[],noTools:'No tools available for this file'},
  mixed:{title:'Mixed selection',icon:File,formats:[],tools:[],noTools:'No shared tools available for this selection'},

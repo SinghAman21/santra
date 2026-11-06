@@ -103,3 +103,30 @@ individual rendering is limited to 32 megapixels. Password-protected documents
 are rejected. Real Windows/GNOME file-manager drag validation remains manual.
 
 Native editor handoff filters mixed selections against the selected capability using inspected file metadata, matching editor validation. Unsupported files do not block compatible files from opening a tool.
+
+
+### SheetJS spreadsheet wheel
+
+The spreadsheet registry offers local SheetJS CE 0.20.3 conversion between XLSX,
+XLS (BIFF8 output), ODS, CSV and UTF-8 TSV. Workbook parsing and writing run in a
+bundled Web Worker with a 30-second timeout, 32 MB input limit, 256-sheet limit,
+and two-million-cell limit per worksheet. Only one source workbook is accepted
+per operation. Formulas are not recalculated. Native outputs use the shared
+artifact job runner, temporary files, atomic publication, configured destination,
+and collision handling; originals remain unchanged.
+
+Shift conversions run in the hidden spreadsheet host without opening the
+workspace. Multi-sheet workbooks are split into one output per worksheet before
+conversion, including CSV, TSV and PDF; no worksheet is silently skipped. CSV
+and TSV outputs contain one worksheet each. PDF is labeled **layout-limited**
+and is generated locally as a paginated table PDF. It does not promise Excel
+print fidelity. PDF export is limited to 100,000 cells and 64 columns per sheet;
+the worksheet preview is limited to 2,000 cells.
+
+Alt exposes only Split and Delete metadata. Split writes one output per selected
+worksheet in the chosen supported format. Delete metadata creates a fresh
+workbook without source Props, Custprops, VBA blobs or workbook-level external
+link parts; copied cell comments and hyperlinks are removed as well. It requires
+acknowledgement that unsupported document parts, macros, external links, charts
+and formatting fidelity can be lost. It is not a forensic metadata scrubber.
+Native Windows and GNOME drag/print dialog behavior still requires manual checks.

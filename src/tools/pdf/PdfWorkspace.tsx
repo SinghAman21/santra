@@ -18,6 +18,7 @@ import {
   type Region,
 } from "./engine";
 import "./tools.css";
+import "./pdf-workspace.css";
 export interface PdfWorkspaceProps {
   files: LocalFile[];
   capability: Capability;

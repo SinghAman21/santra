@@ -1,0 +1,71 @@
+.sheet-preview {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sheet-table {
+  overflow: auto;
+  min-height: 160px;
+  background: #fafafa;
+}
+.sheet-table table {
+  border-collapse: collapse;
+  font: 12px system-ui;
+  white-space: pre-wrap;
+}
+.sheet-table td {
+  border: 1px solid #ddd;
+  padding: 6px 10px;
+  min-width: 70px;
+}
+.sheet-table caption {
+  padding: 8px;
+  text-align: left;
+  color: #ff5a00;
+}
+.spreadsheet-editor .reference-editor-settings label:has(input[type="radio"]),
+.spreadsheet-editor
+  .reference-editor-settings
+  label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 20px;
+}
+.spreadsheet-editor .reference-editor-settings input[type="radio"],
+.spreadsheet-editor .reference-editor-settings input[type="checkbox"] {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  margin: 2px 0;
+  accent-color: #ff5a00;
+  flex: 0 0 16px;
+}
+.spreadsheet-editor .reference-editor-settings {
+  overflow-x: hidden;
+}
+.spreadsheet-editor .reference-editor-settings legend {
+  font-size: 12px;
+  padding: 0;
+  margin-bottom: 8px;
+  max-width: 100%;
+  white-space: normal;
+}
+.sheet-preview > label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.sheet-preview select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+.tool-host-state{position:fixed;inset:0;display:grid;place-items:center;background:#fff;color:#555;font:14px system-ui}

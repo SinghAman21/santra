@@ -66,10 +66,21 @@
         "minHeight": 540,
         "decorations": false,
         "visible": false
+      },
+      {
+        "label": "spreadsheet",
+        "title": "Santra spreadsheet tools",
+        "url": "index.html?santra-sheet-tool=1",
+        "width": 824,
+        "height": 584,
+        "minWidth": 680,
+        "minHeight": 540,
+        "decorations": false,
+        "visible": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: santra-media: http://santra-media.localhost; media-src 'self' blob: santra-media: http://santra-media.localhost; connect-src 'self' ws://127.0.0.1:* santra-media: http://santra-media.localhost; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; worker-src 'self' blob:"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: santra-media: http://santra-media.localhost; media-src 'self' blob: santra-media: http://santra-media.localhost; connect-src 'self' ws://127.0.0.1:* santra-media: http://santra-media.localhost; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; worker-src 'self' blob:; frame-src 'self' about:"
     }
   },
   "bundle": {
@@ -79,7 +90,8 @@
       "../build/icon.ico"
     ],
     "resources": {
-      "../THIRD_PARTY_NOTICES.md": "licenses/THIRD_PARTY_NOTICES.md"
+      "../THIRD_PARTY_NOTICES.md": "licenses/THIRD_PARTY_NOTICES.md",
+      "../licenses/SheetJS-LICENSE.txt": "licenses/SheetJS-LICENSE.txt"
     }
   }
 }
