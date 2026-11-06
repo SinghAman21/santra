@@ -157,7 +157,7 @@ export default function GlobalWheelWindow() {
       if (capability.category !== 'spreadsheet' && ['convert', 'create-archive'].includes(operationName(capability))) {
         const settings = snapshot.settings;
         await api.enqueue({
-          files: incoming,
+          files: incoming.filter(file => supports(capability, file)),
           operation: operationName(capability),
           format,
           options: { quality: settings.quality, stripMetadata: settings.stripMetadata, outputFolder: settings.outputFolder, collision: settings.collision, recursive: settings.recursive, preserveStructure: settings.preserveStructure },
@@ -230,13 +230,13 @@ export default function GlobalWheelWindow() {
         sourceFile={hints[0]}
         sourceName={hints[0]?.name !== 'Dragged file' ? hints[0]?.name : undefined}
         label={mode === 'convert' ? 'Convert' : mode === 'tools' ? 'Tools' : 'File actions'}
-        subtitle={externalFiles.some(file => !file.ext) ? 'Image routes are shown provisionally · drop to verify' : 'Hold the drag · hover a slice · release to apply'}
+        subtitle={externalFiles.some(file => file.category === 'document') && mode === 'convert' ? 'Conversion may lose layout, fonts, images and metadata; TXT keeps text only.' : externalFiles.some(file => !file.ext) ? 'Image routes are shown provisionally · drop to verify' : 'Hold the drag · hover a slice · release to apply'}
         items={items}
         selected={choice}
         onHighlight={highlight}
         onChoose={highlight}
         dragging
-        hideDescription
+        hideDescription={!(mode === 'convert' && externalFiles.some(file => file.category === 'document'))}
       />
     </div>
     <button className="global-wheel-cancel" onClick={() => void api.finishGlobalWheel?.('background')} aria-label="Close drop wheel">×</button>

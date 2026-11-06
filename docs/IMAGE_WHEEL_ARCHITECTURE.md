@@ -308,3 +308,5 @@ link parts; copied cell comments and hyperlinks are removed as well. It requires
 acknowledgement that unsupported document parts, macros, external links, charts
 and formatting fidelity can be lost. It is not a forensic metadata scrubber.
 Native Windows and GNOME drag/print dialog behavior still requires manual checks.
+
+Document Shift routes are exposed per input only after a sandboxed Pandoc conversion probe succeeds for that reader and writer pair. Supported candidates are DOCX, Markdown, HTML, EPUB and TXT; the wheel warns about possible fidelity loss before conversion.

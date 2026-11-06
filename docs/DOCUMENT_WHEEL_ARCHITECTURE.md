@@ -4,7 +4,7 @@
 
 This document defines the proposed drag-first workflow for text and word-processing documents. The current document route is conditionally implemented through the sandboxed Pandoc adapter; only detected, self-tested reader/writer combinations may appear. It currently enforces a 16 MiB input limit, blocks external resources, and does not provide PDF or filter routes. Complex layout fidelity is not guaranteed. See `docs/EPUB_WHEEL_ARCHITECTURE.md` for EPUB-specific behavior and `docs/PDF_WHEEL_ARCHITECTURE.md` for PDF workflows.
 
-Supported candidate inputs are DOCX, Markdown, TXT, HTML, RTF, and EPUB. Candidate outputs are DOCX, Markdown, TXT, HTML, and EPUB, but the wheel must use the actual intersection of verified installed capabilities. Do not advertise ODT, RTF output, RTFD, or text clippings until a separately verified route is added.
+Supported candidate inputs are DOCX, Markdown, TXT, HTML, and EPUB. Candidate outputs are DOCX, Markdown, TXT, HTML, and EPUB, but the wheel must use the actual intersection of verified installed capabilities. Do not advertise ODT, RTF output, RTFD, or text clippings until a separately verified route is added.
 
 ## Modifier and interaction model
 
@@ -19,7 +19,7 @@ Use the global citrus wheel near the drag pointer, with visible output labels, k
 Build the output list from verified reader/writer pairs in the local capability registry. Candidate routes include:
 
 - DOCX to Markdown, TXT, HTML, or EPUB where both reader and writer are verified.
-- Markdown, TXT, HTML, or RTF to DOCX, Markdown, TXT, HTML, or EPUB where supported.
+- Markdown, TXT, or HTML to DOCX, Markdown, TXT, HTML, or EPUB where supported.
 - EPUB conversions as enumerated in the EPUB architecture.
 - Same-family routes only when they perform a useful, tested transformation; do not show a no-op same-format conversion.
 

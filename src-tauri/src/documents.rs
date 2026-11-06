@@ -14,6 +14,7 @@ pub struct DocumentBackend {
     path: Option<PathBuf>,
     readers: Vec<String>,
     writers: Vec<String>,
+    pairs: Vec<(String, String)>,
 }
 
 const INPUTS: &[(&str, &str)] = &[
@@ -22,7 +23,6 @@ const INPUTS: &[(&str, &str)] = &[
     ("html", "html-raw_html"),
     ("docx", "docx"),
     ("epub", "epub"),
-    ("rtf", "rtf"),
 ];
 const OUTPUTS: &[(&str, &str)] = &[
     ("txt", "plain"),
@@ -85,6 +85,25 @@ pub fn detect(overrides: &HashMap<String, String>) -> DocumentBackend {
                 supported_writers.push(extension.into());
             }
         }
+        // Generate controlled probe fixtures when sandboxed binary writers are
+        // unavailable. Only the fixed local probe text is passed to this step;
+        // all conversions of user documents still require --sandbox.
+        for (extension, writer) in [("docx", "docx"), ("epub", "epub")] {
+            let fixture = directory.join(format!("output.{extension}"));
+            if !fixture.is_file() && writers.lines().any(|line| line.trim() == writer) {
+                let mut command = Command::new(&path);
+                command
+                    .args([
+                        "--from=markdown-raw_html-raw_tex",
+                        &format!("--to={writer}"),
+                        "--output",
+                    ])
+                    .arg(&fixture)
+                    .arg("--")
+                    .arg(&source);
+                let _ = crate::media::captured(command, Duration::from_secs(15), || false);
+            }
+        }
         let mut supported_readers = Vec::new();
         for &(extension, reader) in INPUTS {
             let base = reader.split(['+', '-']).next().unwrap_or(reader);
@@ -92,17 +111,8 @@ pub fn detect(overrides: &HashMap<String, String>) -> DocumentBackend {
                 continue;
             }
             let input = match extension {
-                "docx" | "epub"
-                    if supported_writers
-                        .iter()
-                        .any(|value: &String| value == extension) =>
-                {
+                "docx" | "epub" if directory.join(format!("output.{extension}")).is_file() => {
                     directory.join(format!("output.{extension}"))
-                }
-                "rtf" => {
-                    let path = directory.join("input.rtf");
-                    fs::write(&path, "{\\rtf1\\ansi Santra}").ok()?;
-                    path
                 }
                 "docx" | "epub" => continue,
                 _ => source.clone(),
@@ -115,10 +125,54 @@ pub fn detect(overrides: &HashMap<String, String>) -> DocumentBackend {
                 supported_readers.push(extension.into());
             }
         }
+        fs::write(
+            directory.join("input.html"),
+            "<p>Santra local format probe</p>",
+        )
+        .ok()?;
+        let mut pairs = Vec::new();
+        for &(input_ext, reader) in INPUTS {
+            if !supported_readers.iter().any(|value| value == input_ext) {
+                continue;
+            }
+            let input = match input_ext {
+                "docx" | "epub" => directory.join(format!("output.{input_ext}")),
+                "html" => directory.join("input.html"),
+                _ => source.clone(),
+            };
+            if !input.is_file() {
+                continue;
+            }
+            for &(output_ext, writer) in OUTPUTS {
+                if input_ext == output_ext
+                    || !supported_writers.iter().any(|value| value == output_ext)
+                {
+                    continue;
+                }
+                let output = directory.join(format!("pair-{input_ext}-{output_ext}"));
+                let mut command = Command::new(&path);
+                command
+                    .args([
+                        "--sandbox",
+                        &format!("--from={reader}"),
+                        &format!("--to={writer}"),
+                        "--output",
+                    ])
+                    .arg(&output)
+                    .arg("--")
+                    .arg(&input);
+                if crate::media::captured(command, Duration::from_secs(15), || false).is_ok()
+                    && fs::metadata(&output).is_ok_and(|m| m.is_file() && m.len() > 0)
+                {
+                    pairs.push((input_ext.into(), output_ext.into()));
+                }
+            }
+        }
         Some(DocumentBackend {
             path: Some(path),
             readers: supported_readers,
             writers: supported_writers,
+            pairs,
         })
     })()
     .unwrap_or_default();
@@ -128,23 +182,28 @@ pub fn detect(overrides: &HashMap<String, String>) -> DocumentBackend {
 
 impl DocumentBackend {
     pub fn info(&self) -> Value {
-        json!({ "available": self.path.is_some() && !self.readers.is_empty() && !self.writers.is_empty(),
+        json!({ "available": self.path.is_some() && !self.pairs.is_empty(),
             "readers": self.readers, "writers": self.writers })
     }
 
     pub fn supports(&self, input: &str, output: &str) -> bool {
         self.path.is_some()
-            && self.readers.iter().any(|value| value == input)
-            && self.writers.iter().any(|value| value == output)
+            && self
+                .pairs
+                .iter()
+                .any(|(reader, writer)| reader == input && writer == output)
     }
 
     pub fn capabilities(&self) -> Vec<Value> {
-        vec![
-            json!({ "id": "document:convert", "operation": "convert", "label": "Convert documents", "category": "document",
-            "inputs": self.readers, "outputs": self.writers, "backend": "pandoc", "available": self.path.is_some() && !self.readers.is_empty() && !self.writers.is_empty(),
-            "batch": true, "preservesMetadata": false, "options": {},
-            "warning": "Sandboxed conversion, 16 MiB input limit. Complex layout and metadata may be lost; external resources are blocked." }),
-        ]
+        INPUTS.iter().filter_map(|(input, _)| {
+            let outputs: Vec<&str> = self.pairs.iter().filter(|(reader, _)| reader == input)
+                .map(|(_, writer)| writer.as_str()).collect();
+            if outputs.is_empty() { return None; }
+            Some(json!({ "id": format!("document:convert:{input}"), "operation": "convert", "label": "Convert documents", "category": "document",
+                "inputs": [input], "outputs": outputs, "backend": "pandoc", "available": true,
+                "batch": true, "preservesMetadata": false, "options": {},
+                "warning": "Conversion may lose page layout, fonts, images and metadata; TXT retains text only." }))
+        }).collect()
     }
 
     pub fn run(
@@ -176,9 +235,6 @@ impl DocumentBackend {
         {
             return Err("Document signature does not match its extension".into());
         }
-        if extension == "rtf" && !signature[..count].starts_with(b"{\\rtf") {
-            return Err("Invalid RTF signature".into());
-        }
         let reader = INPUTS
             .iter()
             .find(|entry| entry.0 == extension)
@@ -208,5 +264,29 @@ impl DocumentBackend {
             }
         })?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn advertised_document_routes_are_pairwise_probed() {
+        let backend = detect(&HashMap::new());
+        if backend.path.is_some() {
+            assert!(
+                backend.supports("md", "txt"),
+                "the local sandbox must convert the Markdown fixture to text"
+            );
+        }
+        for capability in backend.capabilities() {
+            let input = capability["inputs"][0].as_str().unwrap();
+            for output in capability["outputs"].as_array().unwrap() {
+                assert!(backend.supports(input, output.as_str().unwrap()));
+                assert_ne!(input, output.as_str().unwrap());
+            }
+            assert!(!backend.supports(input, "rtf"));
+        }
+        assert!(!backend.supports("rtf", "txt"));
     }
 }
