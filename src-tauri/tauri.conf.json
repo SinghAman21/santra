@@ -59,6 +59,18 @@
         "transparent": true
       },
       {
+        "label": "audio",
+        "title": "Santra audio editor",
+        "url": "index.html?santra-audio-tool=1",
+        "width": 824,
+        "height": 584,
+        "minWidth": 680,
+        "minHeight": 540,
+        "decorations": false,
+        "visible": false,
+        "transparent": true
+      },
+      {
         "label": "pdf",
         "title": "Santra PDF tools",
         "url": "index.html?santra-pdf-tool=1",

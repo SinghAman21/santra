@@ -132,6 +132,7 @@ struct Data {
     pdf_context: Option<EditorContext>,
     spreadsheet_context: Option<Value>,
     video_context: Option<EditorContext>,
+    audio_context: Option<EditorContext>,
     preview_windows: HashMap<String, LocalFile>,
     settings: Settings,
     persistence_errors: Vec<String>,
@@ -596,7 +597,7 @@ fn category(ext: &str) -> &'static str {
         "jpg" | "jpeg" | "png" | "webp" | "heic" | "heif" | "tiff" | "tif" | "avif" | "bmp"
         | "svg" | "gif" => "image",
         "mp3" | "m4a" | "wav" | "flac" | "ogg" | "opus" | "aiff" | "aif" | "wma" | "aac" => "audio",
-        "mp4" | "mov" | "mkv" | "webm" | "avi" | "wmv" | "m4v" => "video",
+        "mp4" | "mov" | "mkv" | "webm" | "avi" | "wmv" | "m4v" | "mpeg" | "mpg" => "video",
         "pdf" => "pdf",
         "srt" | "vtt" | "ass" | "ssa" => "subtitle",
         "zip" | "tar" | "gz" | "rar" => "archive",
@@ -2847,7 +2848,7 @@ pub fn select_global_operation(
             .map_err(|e| e.to_string())?;
         editor.show().map_err(|e| e.to_string())?;
         editor.set_focus().map_err(|e| e.to_string())?;
-    } else if category == "image" || category == "video" {
+    } else if category == "image" || category == "video" || category == "audio" {
         let editor = EditorRequest {
             capability_id: request.capability_id,
             files,
@@ -2856,8 +2857,10 @@ pub fn select_global_operation(
         };
         if category == "image" {
             open_image_tool(app, window.clone(), state, editor)?;
-        } else {
+        } else if category == "video" {
             open_video_tool(app, window.clone(), state, editor)?;
+        } else {
+            open_audio_tool(app, window.clone(), state, editor)?;
         }
     } else {
         for file in &request.files {
@@ -3583,4 +3586,118 @@ pub fn save_spreadsheet_output(
     suffix: String,
 ) -> Result<(), String> {
     save_local_output(app, state, path, format, data, Some(suffix), true)
+}
+
+
+#[tauri::command]
+pub fn open_audio_tool(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+    request: EditorRequest,
+) -> Result<Value, String> {
+    require_window(&window, &["workspace", "wheel"])?;
+    let context = editor_context(&state, request, "audio")?;
+    state.lock()?.audio_context = Some(context.clone());
+    let window = app
+        .get_webview_window("audio")
+        .ok_or("Audio editor window is unavailable")?;
+    window.show().map_err(|error| error.to_string())?;
+    let _ = app.emit_to("audio", "santra:editor-context", &context);
+    window.set_focus().map_err(|error| error.to_string())?;
+    Ok(serde_json::json!({ "opened": true }))
+}
+
+#[tauri::command]
+pub fn audio_tool_context(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    if window.label() != "audio" {
+        return Err("Audio editor context is private".into());
+    }
+    let context = state
+        .lock()?
+        .audio_context
+        .clone()
+        .ok_or("Audio editor is no longer available")?;
+    serde_json::to_value(context).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn apply_audio_tool(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+    request: ApplyAudioRequest,
+) -> Result<Vec<Job>, String> {
+    if window.label() != "audio" {
+        return Err("Only the audio editor can apply this recipe".into());
+    }
+    if !request.options.is_object() || request.options.to_string().len() > 100_000 {
+        return Err("Invalid audio recipe".into());
+    }
+    let context = state
+        .lock()?
+        .audio_context
+        .clone()
+        .ok_or("Audio editor is no longer available")?;
+    let format = request.format.unwrap_or_else(|| context.format.clone());
+    if !context.capability["outputs"]
+        .as_array()
+        .is_some_and(|outputs| outputs.iter().any(|output| output == &format))
+    {
+        return Err("Unsupported audio output".into());
+    }
+    let mut options = context
+        .options
+        .as_object()
+        .cloned()
+        .ok_or("Invalid audio context")?;
+    options.extend(
+        request
+            .options
+            .as_object()
+            .ok_or("Invalid audio recipe")?
+            .clone(),
+    );
+    let operation = context.capability["operation"]
+        .as_str()
+        .ok_or("Invalid audio operation")?
+        .to_string();
+    let jobs = enqueue(
+        app.clone(),
+        window.clone(),
+        state,
+        EnqueueRequest {
+            files: context.files,
+            operation,
+            format,
+            options: Value::Object(options),
+        },
+    )?;
+    app.state::<AppState>().lock()?.audio_context = None;
+    window.hide().map_err(|error| error.to_string())?;
+    Ok(jobs)
+}
+
+#[tauri::command]
+pub fn close_audio_tool(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    if window.label() != "audio" {
+        return Err("Only the audio editor can close itself".into());
+    }
+    state.lock()?.audio_context = None;
+    window.hide().map_err(|error| error.to_string())?;
+    Ok(true)
+}
+
+
+
+#[derive(Deserialize)]
+pub struct ApplyAudioRequest {
+    format: Option<String>,
+    options: Value,
 }

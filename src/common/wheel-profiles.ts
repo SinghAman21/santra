@@ -4,8 +4,8 @@ import type { WheelFamily } from './file-kind';
 export interface WheelProfile { title:string; icon:LucideIcon; formats:string[]; tools:string[]; noTools:string }
 export const wheelProfiles:Record<WheelFamily,WheelProfile>={
  image:{title:'Image',icon:FileImage,formats:['WEBP','JPG','PNG','TIFF','AVIF','BMP','GIF','PDF'],tools:['compress','crop','resize','rotate','background','edit-image','metadata'],noTools:'No image tools available for this selection'},
- video:{title:'Video',icon:FileVideo,formats:['MP4','MOV','MKV','WEBM','AVI','WMV','GIF'],tools:['compress','trim','split','crop','resize','rotate','flip','speed','snapshot','mute','redact','strip-metadata','merge','gif','extract-audio'],noTools:'No video tools available. Check the local FFmpeg engine.'},
- audio:{title:'Audio',icon:AudioLines,formats:['M4A','WAV','FLAC','OGG','OPUS','AIFF','WMA','MP3'],tools:['compress','strip-metadata','normalize','visualize','trim','channels','split','merge'],noTools:'No audio tools available. Check the local FFmpeg engine.'},
+ video:{title:'Video',icon:FileVideo,formats:['MP4','MOV','MKV','WEBM','AVI','WMV','GIF','MPEG'],tools:['compress','trim','split','crop','resize','rotate','flip','speed','snapshot','mute','redact','strip-metadata','merge','gif','extract-audio'],noTools:'No video tools available. Check the local FFmpeg engine.'},
+ audio:{title:'Audio',icon:AudioLines,formats:['M4A','WAV','FLAC','OGG','OPUS','AIFF','WMA','MP3','MPEG'],tools:['compress','strip-metadata','normalize','visualize','trim','channels','split','merge'],noTools:'No audio tools available. Check the local FFmpeg engine.'},
  pdf:{title:'PDF',icon:FileText,formats:['TXT','PDF'],tools:['pdf-organize','pdf-merge','pdf-split','pdf-extract','pdf-insert','compress','redact','metadata','render'],noTools:'No PDF tools available. Check local PDF engines.'},
  archive:{title:'Archive',icon:FileArchive,formats:['ZIP','TAR','GZ'],tools:['extract','create-archive'],noTools:'No archive tools available for this selection'},
  document:{title:'Document',icon:FileText,formats:['DOCX','MD','TXT','HTML','EPUB'],tools:[],noTools:'No tools available for this file'},

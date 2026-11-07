@@ -23,8 +23,8 @@ pub struct MediaBackend {
     filters: String,
 }
 
-const VIDEO_INPUTS: &[&str] = &["mp4", "mov", "mkv", "webm", "avi", "wmv"];
-const AUDIO_INPUTS: &[&str] = &["mp3", "wav", "flac", "ogg", "opus", "m4a", "aiff", "wma"];
+const VIDEO_INPUTS: &[&str] = &["mp4", "mov", "mkv", "webm", "avi", "wmv", "mpeg", "mpg"];
+const AUDIO_INPUTS: &[&str] = &["mp3", "wav", "flac", "ogg", "opus", "m4a", "aiff", "wma", "mpeg", "mpg"];
 const VIDEO_OUTPUTS: &[(&str, &str, &str)] = &[
     ("mp4", "libx264", "mp4"),
     ("mkv", "libx264", "matroska"),
