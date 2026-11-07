@@ -178,4 +178,4 @@
 .pdf-workspace__body { display:grid; }
 .pdf-workspace__preview { min-height:0; }
 @media(max-width:700px) { .pdf-workspace__preview { min-height:220px; } }
-.tool-host-state{position:fixed;inset:0;display:grid;place-items:center;background:#fff;color:#555;font:14px system-ui}
+.tool-host-state{position:fixed;inset:12px;display:grid;place-items:center;border:1px solid #e6e8e1;border-radius:18px;background:#fff;color:#555;font:14px system-ui}

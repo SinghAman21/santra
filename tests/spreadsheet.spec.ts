@@ -65,9 +65,7 @@ async function mount(page, operation, format) {
     buffer: fixture(),
   });
   await expect(page.getByLabel("Preview worksheet")).toContainText("Second");
-  await expect(
-    page.getByRole("button", { name: "Save new output" }),
-  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save new output" })).toBeDisabled();
 }
 async function output(page) {
   const pending = page.waitForEvent("download");
@@ -119,9 +117,10 @@ test("metadata removal requires loss acknowledgement and strips controlled prope
   page,
 }) => {
   await mount(page, "strip-metadata", "xlsx");
+  await page.getByRole("checkbox", { name: "First", exact: true }).check();
   await page.getByRole("button", { name: "Save new output" }).click();
   await expect(page.getByRole("alert")).toContainText("Acknowledge");
-  await page.getByRole("checkbox").check();
+  await page.getByRole("checkbox", { name: /I understand/ }).check();
   const book = XLSX.read(await output(page));
   expect(book.Props?.Author).not.toBe("Private author");
   expect(book.Props?.Title).not.toBe("Private title");
@@ -209,9 +208,7 @@ test("legacy XLS conversion rejects row ranges that would truncate data", async 
         XLSX.write(book, { type: "array", bookType: "xlsx" }),
       ),
     });
-  await expect(
-    page.getByRole("button", { name: "Save new output" }),
-  ).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save new output" })).toBeDisabled();
   await page.getByRole("button", { name: "Save new output" }).click();
   await expect(page.getByRole("alert")).toContainText("65,536 rows");
 });

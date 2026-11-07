@@ -1,3 +1,4 @@
+import { Button as UiNativeButton } from '../../common/ui/primitives';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Scissors } from 'lucide-react';
 import { api } from '../../common/bridge';
@@ -105,8 +106,8 @@ export default function VideoTimeline({ duration, currentTime, fps, variableFram
         <div className="timeline-ruler" aria-hidden="true">{ticks.map((time, index) => <i key={time} style={{ left: time * scale }}><span>{!frameTicks || index % Math.max(1, Math.ceil(70 / (scale * averageStep))) === 0 ? clock(time) : ''}</span></i>)}</div>
         <div className="timeline-visible-frames" style={{ left: sampleStart * scale, width: (sampleEnd - sampleStart) * scale }}><FrameStrip start={sampleStart} end={sampleEnd} count={thumbnailCount}/></div>
         {selection && <><div className="video-timeline-dim" style={{left:0,width:selection.start * scale}}/><div className="video-timeline-dim" style={{left:selection.end * scale,right:0}}/><div className="video-timeline-selection" style={{ left: selection.start * scale, width: Math.max(0, selection.end - selection.start) * scale }}/></>}
-        {mode === 'trim' && selection && (['start','end'] as const).map(kind => <button key={kind} type="button" role="slider" className="timeline-trim-grip" aria-label={`Trim ${kind}`} aria-valuemin={0} aria-valuemax={duration} aria-valuenow={selection[kind]} style={{left:selection[kind] * scale}} onPointerDown={event => begin(event, kind)}>⋮</button>)}
-        {mode === 'split' && [...splitPoints].sort((a,b) => a.timeSeconds - b.timeSeconds).map((point,index) => <button key={point.id} type="button" role="slider" className="timeline-split-marker" aria-label={`Split ${index + 1} marker`} aria-valuemin={0} aria-valuemax={duration} aria-valuenow={point.timeSeconds} style={{left:point.timeSeconds * scale}} onPointerDown={event => begin(event, `split:${point.id}`)}><span>{index + 1}</span></button>)}
+        {mode === 'trim' && selection && (['start','end'] as const).map(kind => <UiNativeButton key={kind} type="button" role="slider" className="timeline-trim-grip" aria-label={`Trim ${kind}`} aria-valuemin={0} aria-valuemax={duration} aria-valuenow={selection[kind]} style={{left:selection[kind] * scale}} onPointerDown={event => begin(event, kind)}>⋮</UiNativeButton>)}
+        {mode === 'split' && [...splitPoints].sort((a,b) => a.timeSeconds - b.timeSeconds).map((point,index) => <UiNativeButton key={point.id} type="button" role="slider" className="timeline-split-marker" aria-label={`Split ${index + 1} marker`} aria-valuemin={0} aria-valuemax={duration} aria-valuenow={point.timeSeconds} style={{left:point.timeSeconds * scale}} onPointerDown={event => begin(event, `split:${point.id}`)}><span>{index + 1}</span></UiNativeButton>)}
         <div className="video-timeline-playhead" style={{ left: currentTime * scale }} aria-hidden="true"/>
       </div>
     </div>

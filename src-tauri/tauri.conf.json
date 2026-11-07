@@ -43,7 +43,8 @@
         "minWidth": 680,
         "minHeight": 540,
         "decorations": false,
-        "visible": false
+        "visible": false,
+        "transparent": true
       },
       {
         "label": "video",
@@ -54,7 +55,8 @@
         "minWidth": 680,
         "minHeight": 540,
         "decorations": false,
-        "visible": false
+        "visible": false,
+        "transparent": true
       },
       {
         "label": "pdf",
@@ -65,7 +67,8 @@
         "minWidth": 680,
         "minHeight": 540,
         "decorations": false,
-        "visible": false
+        "visible": false,
+        "transparent": true
       },
       {
         "label": "spreadsheet",
@@ -76,7 +79,8 @@
         "minWidth": 680,
         "minHeight": 540,
         "decorations": false,
-        "visible": false
+        "visible": false,
+        "transparent": true
       }
     ],
     "security": {

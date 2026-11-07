@@ -1,3 +1,4 @@
+import { Button as UiNativeButton } from '../../common/ui/primitives';
 import { useEffect, useState } from 'react';
 import type { VideoEditorContext } from '../../common/types';
 import { api } from '../../common/bridge';
@@ -26,7 +27,7 @@ export default function VideoToolHost() {
     load();
     return () => { active = false; stop?.(); window.removeEventListener('focus', load); };
   }, []);
-  if (error) return <main className="video-tool-state" role="alert"><h1>Could not open video editor</h1><p>{error}</p><button onClick={() => void api.closeVideoTool?.()}>Close</button></main>;
+  if (error) return <main className="video-tool-state" role="alert"><h1>Could not open video editor</h1><p>{error}</p><UiNativeButton onClick={() => void api.closeVideoTool?.()}>Close</UiNativeButton></main>;
   if (!context) return <main className="video-tool-state" aria-live="polite">Preparing local video preview…</main>;
   return <VideoToolWindow
     key={context.id || `${context.capability.id}:${context.files[0]?.path}`}

@@ -1,3 +1,4 @@
+import { Button as UiNativeButton } from '../../common/ui/primitives';
 import { useEffect, useState } from 'react';
 import type { ImageEditorContext } from '../../common/types';
 import { api } from '../../common/bridge';
@@ -26,7 +27,7 @@ export default function ImageToolHost() {
     load();
     return () => { active = false; stop?.(); window.removeEventListener('focus', load); };
   }, []);
-  if (error) return <main className="image-tool-error" role="alert"><h1>Could not open image editor</h1><p>{error}</p><button onClick={() => void api.closeImageTool?.()}>Close</button></main>;
+  if (error) return <main className="image-tool-error" role="alert"><h1>Could not open image editor</h1><p>{error}</p><UiNativeButton onClick={() => void api.closeImageTool?.()}>Close</UiNativeButton></main>;
   if (!context) return <main className="image-tool-loading" aria-live="polite">Preparing local image preview…</main>;
   return <ImageToolWindow
     key={context.id || `${context.capability.id}:${context.files[0]?.path}`}

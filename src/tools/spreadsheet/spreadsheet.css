@@ -28,7 +28,7 @@
 .spreadsheet-editor .reference-editor-settings label:has(input[type="radio"]),
 .spreadsheet-editor
   .reference-editor-settings
-  label:has(input[type="checkbox"]) {
+  label:has([data-slot="checkbox"]) {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -68,4 +68,6 @@
   border: 1px solid #ddd;
   border-radius: 8px;
 }
-.tool-host-state{position:fixed;inset:0;display:grid;place-items:center;background:#fff;color:#555;font:14px system-ui}
+.tool-host-state{position:fixed;inset:12px;display:grid;place-items:center;border:1px solid #e6e8e1;border-radius:18px;background:#fff;color:#555;font:14px system-ui}
+
+.spreadsheet-editor .reference-editor-settings [data-slot="checkbox"]{width:16px;min-width:16px;height:16px;margin:2px 0;flex:0 0 16px}

@@ -1,3 +1,7 @@
+import * as Collapsible from '@radix-ui/react-collapsible';
+import * as Dialog from '@radix-ui/react-dialog';
+import { Checkbox } from '../../common/ui/checkbox';
+import { Button as UiNativeButton, Input as UiNativeInput } from '../../common/ui/primitives';
 import './image-tool-window.css';
 import Crop from './Crop';
 import Resize from './Resize';
@@ -29,12 +33,9 @@ const labels: Record<string, string> = {
 const ratios: Record<string, number> = { '1:1': 1, '4:3': 4 / 3, '16:9': 16 / 9, '3:2': 3 / 2 };
 
 export default function ImageToolWindow({ capability, file, format, initialOptions, onClose, onApply }: Props) {
-  const windowRef = useRef<HTMLElement>(null);
   const previewWrapRef = useRef<HTMLDivElement>(null);
   const previewImageRef = useRef<HTMLImageElement>(null);
   const cropDragRef = useRef<{ mode: 'draw' | 'move' | 'resize'; handle?: string; startX: number; startY: number; x: number; y: number; width: number; height: number } | null>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
   const operation = capability.operation || capability.id.split(':').pop() || '';
   const [values, setValues] = useState<Record<string, string>>(() => ({ quality: '85', brightness: '1', saturation: '1', contrast: '1', width: '', height: '', x: '0', y: '0', angle: operation === 'rotate' ? '90' : '0', direction: 'horizontal', backgroundType: 'solid', backgroundColor: '#ffffff', backgroundColor2: '#ff5a00', padding: operation === 'background' ? '32' : '0', fit: operation === 'background' ? 'contain' : 'inside', stripMetadata: 'false', flipHorizontal: 'false', flipVertical: 'false', title: '', artist: '', copyright: '', description: '', dateTime: '', ...initialOptions }));
   const [selectedFormat, setSelectedFormat] = useState(format);
@@ -57,22 +58,6 @@ export default function ImageToolWindow({ capability, file, format, initialOptio
   const recipe = useMemo(() => Object.fromEntries(Object.entries(values).filter(([, value]) => value !== '')), [values]);
   const previewRecipe = useMemo<Record<string, string>>(() => operation === 'metadata' ? {} : recipe, [operation, recipe]);
 
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const panel = windowRef.current;
-    panel?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
-    const handle = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { closeRef.current(); return; }
-      if (event.key !== 'Tab') return;
-      const elements = panel?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled)');
-      if (!elements?.length) return;
-      const first = elements[0], last = elements[elements.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', handle);
-    return () => { document.removeEventListener('keydown', handle); previous?.focus(); };
-  }, []);
 
   useEffect(() => {
     let current = true;
@@ -199,9 +184,9 @@ export default function ImageToolWindow({ capability, file, format, initialOptio
   // Processor limits belong to capability/error states, not every editor panel.
   const notice = applyError;
 
-  return <div className="image-tool-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <section ref={windowRef} className="image-tool-window" role="dialog" aria-modal="true" aria-label={title}>
-      <header className="image-tool-header"><div><h2>{title}</h2><p title={file.name}>{file.name}{sourceDimensions ? ` · ${sourceDimensions.width} × ${sourceDimensions.height}` : ''} · {(file.size / 1024 / 1024).toFixed(2)} MB</p></div><button className="image-tool-close" aria-label="Close editor" disabled={applying} onClick={onClose}><X size={17}/></button></header>
+  return <Dialog.Root open onOpenChange={open => { if (!open && !applying) onClose(); }}><Dialog.Portal><Dialog.Overlay asChild><div className="image-tool-backdrop">
+    <Dialog.Content asChild aria-label={title} aria-describedby={undefined}><section className="image-tool-window">
+      <header className="image-tool-header"><div><Dialog.Title asChild><h2>{title}</h2></Dialog.Title><p title={file.name}>{file.name}{sourceDimensions ? ` · ${sourceDimensions.width} × ${sourceDimensions.height}` : ''} · {(file.size / 1024 / 1024).toFixed(2)} MB</p></div><UiNativeButton className="image-tool-close" aria-label="Close editor" disabled={applying} onClick={onClose}><X size={17}/></UiNativeButton></header>
       <div className="image-tool-body">
         <div className="image-tool-preview-column"><span className="image-tool-preview-label">Local preview</span>
         <div className="image-tool-preview-wrap" ref={previewWrapRef} style={operation === 'background' && values.backgroundType !== 'image' ? { backgroundImage: 'none', backgroundColor: values.backgroundColor } : undefined}>
@@ -213,9 +198,9 @@ export default function ImageToolWindow({ capability, file, format, initialOptio
           </div>}
           {preview?.sourceWidth && preview.sourceHeight && <span className="image-tool-dimensions">{preview.sourceWidth} × {preview.sourceHeight} px</span>}
         </div>
-        <div className="image-tool-preview-toolbar"><span>Before / current</span><div><details className="image-tool-navigation"><summary>Zoom &amp; pan</summary>          <div className="image-tool-zoom" role="group" aria-label="Preview controls"><button aria-label="Zoom out" title="Zoom out" disabled={zoom <= 0.5} onClick={() => { setZoom(current => Math.max(0.5, Number((current - 0.25).toFixed(2)))); setPan({ x: 0, y: 0 }); }}><Minus size={15}/></button><span>{Math.round(zoom * 100)}%</span><button aria-label="Zoom in" title="Zoom in" disabled={zoom >= 3} onClick={() => setZoom(current => Math.min(3, Number((current + 0.25).toFixed(2))))}><Plus size={15}/></button><button aria-label="Reset zoom" title="Reset zoom" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}><Maximize size={14}/></button></div>
-          <div className="image-tool-pan" role="group" aria-label="Move image preview"><button aria-label="Move image up" disabled={!preview?.url} onClick={() => panBy(0, -48)}><ArrowUp size={15}/></button><button aria-label="Move image left" disabled={!preview?.url} onClick={() => panBy(-48, 0)}><ArrowLeft size={15}/></button><button aria-label="Move image right" disabled={!preview?.url} onClick={() => panBy(48, 0)}><ArrowRight size={15}/></button><button aria-label="Move image down" disabled={!preview?.url} onClick={() => panBy(0, 48)}><ArrowDown size={15}/></button></div>
-</details><button className="image-tool-fit" aria-label="Fit image" onClick={() => { setZoom(1); setPan({x:0,y:0}); }}>Fit</button></div></div></div>
+        <div className="image-tool-preview-toolbar"><span>Before / current</span><div><Collapsible.Root className="image-tool-navigation"><Collapsible.Trigger asChild><UiNativeButton type="button" variant="ghost" size="sm">Zoom &amp; pan</UiNativeButton></Collapsible.Trigger><Collapsible.Content>          <div className="image-tool-zoom" role="group" aria-label="Preview controls"><UiNativeButton aria-label="Zoom out" title="Zoom out" disabled={zoom <= 0.5} onClick={() => { setZoom(current => Math.max(0.5, Number((current - 0.25).toFixed(2)))); setPan({ x: 0, y: 0 }); }}><Minus size={15}/></UiNativeButton><span>{Math.round(zoom * 100)}%</span><UiNativeButton aria-label="Zoom in" title="Zoom in" disabled={zoom >= 3} onClick={() => setZoom(current => Math.min(3, Number((current + 0.25).toFixed(2))))}><Plus size={15}/></UiNativeButton><UiNativeButton aria-label="Reset zoom" title="Reset zoom" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}><Maximize size={14}/></UiNativeButton></div>
+          <div className="image-tool-pan" role="group" aria-label="Move image preview"><UiNativeButton aria-label="Move image up" disabled={!preview?.url} onClick={() => panBy(0, -48)}><ArrowUp size={15}/></UiNativeButton><UiNativeButton aria-label="Move image left" disabled={!preview?.url} onClick={() => panBy(-48, 0)}><ArrowLeft size={15}/></UiNativeButton><UiNativeButton aria-label="Move image right" disabled={!preview?.url} onClick={() => panBy(48, 0)}><ArrowRight size={15}/></UiNativeButton><UiNativeButton aria-label="Move image down" disabled={!preview?.url} onClick={() => panBy(0, 48)}><ArrowDown size={15}/></UiNativeButton></div>
+</Collapsible.Content></Collapsible.Root><UiNativeButton className="image-tool-fit" aria-label="Fit image" onClick={() => { setZoom(1); setPan({x:0,y:0}); }}>Fit</UiNativeButton></div></div></div>
         <div className="image-tool-controls"><div className="editor-section-label">Output settings</div>
           {operation === 'crop' && <Crop {...controls}/>}
           {operation === 'resize' && <Resize {...controls}/>}
@@ -225,11 +210,11 @@ export default function ImageToolWindow({ capability, file, format, initialOptio
           {operation === 'compress' && <Compress {...controls}/>}
           {operation === 'metadata' && <Metadata {...controls}/>}
           {operation === 'strip-metadata' && <StripMetadata {...controls}/>}
-          {capability.preservesMetadata && operation !== 'metadata' && <label className="image-tool-check"><input type="checkbox" checked={values.stripMetadata === 'true'} onChange={event => set('stripMetadata', String(event.target.checked))}/> {capability.preservesMetadata ? 'Remove metadata from the copy' : 'This local image backend removes metadata from the copy'}</label>}
+          {capability.preservesMetadata && operation !== 'metadata' && <label className="image-tool-check"><Checkbox checked={values.stripMetadata === 'true'} onCheckedChange={checked => set('stripMetadata', String(checked === true))}/> {capability.preservesMetadata ? 'Remove metadata from the copy' : 'This local image backend removes metadata from the copy'}</label>}
         </div>
       </div>
       {notice && <div className={`image-tool-notice ${applyError ? 'has-error' : ''}`} role={applyError ? 'alert' : 'status'}>{notice}</div>}
-      <footer className="image-tool-footer"><div className="image-tool-output"><strong>{outputName}</strong><span>New copy · configured destination · collision-safe</span></div><div className="image-tool-footer-actions"><button className="image-tool-reset" disabled={applying || !changed} onClick={() => { setRatio('Free'); setZoom(1); setPan({ x: 0, y: 0 }); setApplyError(''); setSelectedFormat(format); const padding = operation === 'background' ? 32 : 0; setValues({ quality: '85', brightness: '1', saturation: '1', contrast: '1', width: operation === 'background' ? String((originalDimensions.current?.width || 0) + padding * 2) : '', height: operation === 'background' ? String((originalDimensions.current?.height || 0) + padding * 2) : '', x: '0', y: '0', angle: operation === 'rotate' ? '90' : '0', direction: 'horizontal', backgroundType: 'solid', backgroundColor: '#ffffff', backgroundColor2: '#ff5a00', padding: String(padding), fit: operation === 'background' ? 'contain' : 'inside', stripMetadata: 'false', flipHorizontal: 'false', flipVertical: 'false', title: '', artist: '', copyright: '', description: '', dateTime: '' }); setChanged(false); }}>Reset</button><button className="editor-cancel" disabled={applying} onClick={onClose}>Cancel</button><button className="image-tool-apply" disabled={applying} onClick={async () => { setApplying(true); setApplyError(''); try { await onApply(selectedFormat, values); } catch (error) { setApplyError(error instanceof Error ? error.message : String(error)); } finally { setApplying(false); } }}>{applying ? <RotateCw className="spin" size={16}/> : <Check size={16}/>} {applying ? 'Queueing…' : 'Save new copy'}</button></div></footer>
-    </section>
-  </div>;
+      <footer className="image-tool-footer"><div className="image-tool-output"><strong>{outputName}</strong><span>New copy · configured destination · collision-safe</span></div><div className="image-tool-footer-actions"><UiNativeButton className="image-tool-reset" disabled={applying || !changed} onClick={() => { setRatio('Free'); setZoom(1); setPan({ x: 0, y: 0 }); setApplyError(''); setSelectedFormat(format); const padding = operation === 'background' ? 32 : 0; setValues({ quality: '85', brightness: '1', saturation: '1', contrast: '1', width: operation === 'background' ? String((originalDimensions.current?.width || 0) + padding * 2) : '', height: operation === 'background' ? String((originalDimensions.current?.height || 0) + padding * 2) : '', x: '0', y: '0', angle: operation === 'rotate' ? '90' : '0', direction: 'horizontal', backgroundType: 'solid', backgroundColor: '#ffffff', backgroundColor2: '#ff5a00', padding: String(padding), fit: operation === 'background' ? 'contain' : 'inside', stripMetadata: 'false', flipHorizontal: 'false', flipVertical: 'false', title: '', artist: '', copyright: '', description: '', dateTime: '' }); setChanged(false); }}>Reset</UiNativeButton><UiNativeButton className="editor-cancel" disabled={applying} onClick={onClose}>Cancel</UiNativeButton><UiNativeButton className="image-tool-apply" disabled={applying} onClick={async () => { setApplying(true); setApplyError(''); try { await onApply(selectedFormat, values); } catch (error) { setApplyError(error instanceof Error ? error.message : String(error)); } finally { setApplying(false); } }}>{applying ? <RotateCw className="spin" size={16}/> : <Check size={16}/>} {applying ? 'Queueing…' : 'Save new copy'}</UiNativeButton></div></footer>
+    </section></Dialog.Content>
+  </div></Dialog.Overlay></Dialog.Portal></Dialog.Root>;
 }

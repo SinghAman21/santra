@@ -20,6 +20,6 @@ export default function SpreadsheetHost() {
     })();
     return () => { active = false; unlisten?.(); };
   }, []);
-  if (context) return <SpreadsheetEditor key={context.id} context={context} onClose={() => { setContext(null); void getCurrentWindow().hide(); }} />;
+  if (context) return <SpreadsheetEditor key={context.id} context={context} onClose={() => { void getCurrentWindow().hide().then(() => setContext(null)).catch(reason => setError(String(reason))); }} />;
   return <main className="tool-host-state" role={error ? "alert" : "status"}>{error || "Opening spreadsheet tools…"}</main>;
 }

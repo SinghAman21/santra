@@ -560,7 +560,7 @@ test('image editor exposes a real padded background canvas and directional zoom 
   await doubleTap(page, 'Alt');
   await page.getByRole('menuitem', { name: /^Add background/ }).click();
   const backgroundEditor = page.getByRole('dialog', { name: 'Add background' });
-  await backgroundEditor.getByRole('button', { name: /Background.*Single colour/ }).click();
+  await backgroundEditor.getByRole('combobox', { name: /Background.*Single colour/ }).click();
   await backgroundEditor.getByRole('option', { name: 'Custom' }).click();
   await expect(backgroundEditor.getByLabel('Canvas width')).toHaveValue('864');
   await expect(backgroundEditor.getByLabel('Canvas height')).toHaveValue('664');
@@ -575,7 +575,7 @@ test('image editor exposes a real padded background canvas and directional zoom 
   await doubleTap(page, 'Alt');
   await page.getByRole('menuitem', { name: /^Edit photo/ }).click();
   const photoEditor = page.getByRole('dialog', { name: 'Edit photo' });
-  await photoEditor.locator('summary').click();
+  await photoEditor.getByRole('button', { name: 'Zoom & pan' }).click();
   await expect(photoEditor.getByRole('button', { name: 'Move image up' })).toBeEnabled();
   await photoEditor.getByRole('button', { name: 'Move image up' }).click();
   await expect(photoEditor.locator('.image-tool-preview')).toHaveAttribute('style', /--image-pan-y: -48px/);

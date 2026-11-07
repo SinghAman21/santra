@@ -1,3 +1,6 @@
+import { Checkbox } from '../../common/ui/checkbox';
+import { Slider as ShadcnSlider } from '../../common/ui/slider';
+import { Button as UiNativeButton, Input as UiNativeInput, NativeSelect as UiNativeSelect } from '../../common/ui/primitives';
 import { invoke } from "@tauri-apps/api/core";
 import { api, isDesktop } from "../../common/bridge";
 import { useEffect, useRef, useState } from "react";
@@ -472,11 +475,11 @@ export default function PdfWorkspace({
         >
           <div className="pdf-toolbar">
             <span>{display.length} pages</span>
-            <button type="button" disabled={busy} onClick={() => void choose()}>
+            <UiNativeButton type="button" disabled={busy} onClick={() => void choose()}>
               Upload PDF
-            </button>
+            </UiNativeButton>
           </div>
-          <input
+          <UiNativeInput
             ref={input}
             type="file"
             accept="application/pdf,.pdf"
@@ -488,7 +491,7 @@ export default function PdfWorkspace({
             }}
           />
           {!primary && (
-            <button
+            <UiNativeButton
               type="button"
               className="pdf-upload"
               onClick={() => void choose()}
@@ -497,7 +500,7 @@ export default function PdfWorkspace({
               {files.length > 0 && (
                 <small>Choose {files[0].name} to load its pages</small>
               )}
-            </button>
+            </UiNativeButton>
           )}
           {op === "pdf-merge" ? (
             <div className="pdf-grid">
@@ -524,23 +527,23 @@ export default function PdfWorkspace({
                   <span>
                     {i + 1}. {s.name}
                   </span>
-                  <button
+                  <UiNativeButton
                     type="button"
                     onClick={() =>
                       setSources((v) => v.filter((x) => x.id !== s.id))
                     }
                   >
                     Remove
-                  </button>
+                  </UiNativeButton>
                 </article>
               ))}
-              <button
+              <UiNativeButton
                 type="button"
                 className="pdf-upload"
                 onClick={() => void choose()}
               >
                 + Add PDFs
-              </button>
+              </UiNativeButton>
             </div>
           ) : (
             <div className="pdf-grid">
@@ -566,7 +569,8 @@ export default function PdfWorkspace({
                     change(next);
                   }}
                 >
-                  <button
+                  <UiNativeButton
+                    variant="unstyled"
                     type="button"
                     aria-pressed={selected.includes(i)}
                     aria-label={`Select page ${p.index + 1}`}
@@ -584,24 +588,24 @@ export default function PdfWorkspace({
                         index={p.index}
                       />
                     </div>
-                  </button>
-                  <button
+                  </UiNativeButton>
+                  <UiNativeButton
                     type="button"
                     className="pdf-preview-button"
                     onClick={() => setExpanded(i)}
                     aria-label={`Preview page ${p.index + 1}`}
                   >
                     Preview
-                  </button>
+                  </UiNativeButton>
                 </article>
               ))}
             </div>
           )}
           {expanded !== null && display[expanded] && (
             <div className="pdf-expanded">
-              <button type="button" onClick={() => setExpanded(null)}>
+              <UiNativeButton type="button" onClick={() => setExpanded(null)}>
                 Close preview
-              </button>
+              </UiNativeButton>
               <div
                 className="pdf-redaction"
                 onPointerDown={(e) => {
@@ -666,26 +670,26 @@ export default function PdfWorkspace({
       }
       settings={
         <>
-          <button
+          <UiNativeButton
             type="button"
             onClick={() => setSelected(display.map((_, i) => i))}
           >
             Select All
-          </button>{" "}
-          <button type="button" onClick={() => setSelected([])}>
+          </UiNativeButton>{" "}
+          <UiNativeButton type="button" onClick={() => setSelected([])}>
             Clear Selection
-          </button>
+          </UiNativeButton>
           {["pdf-organize", "pdf-rotate"].includes(op) && (
             <>
-              <button
+              <UiNativeButton
                 type="button"
                 onClick={() =>
                   change(pages.filter((_, i) => !selected.includes(i)))
                 }
               >
                 Delete selected
-              </button>
-              <button
+              </UiNativeButton>
+              <UiNativeButton
                 type="button"
                 onClick={() =>
                   change(
@@ -698,8 +702,8 @@ export default function PdfWorkspace({
                 }
               >
                 Rotate selected
-              </button>
-              <button
+              </UiNativeButton>
+              <UiNativeButton
                 type="button"
                 disabled={!history.length}
                 onClick={() => {
@@ -709,10 +713,10 @@ export default function PdfWorkspace({
                 }}
               >
                 Undo
-              </button>
+              </UiNativeButton>
               <label>
                 Move selected page to position
-                <input
+                <UiNativeInput
                   type="number"
                   min="1"
                   max={pages.length}
@@ -720,7 +724,7 @@ export default function PdfWorkspace({
                   onChange={(e) => setRange(e.target.value)}
                 />
               </label>
-              <button
+              <UiNativeButton
                 type="button"
                 disabled={selected.length !== 1}
                 onClick={() => {
@@ -734,26 +738,26 @@ export default function PdfWorkspace({
                 }}
               >
                 Move page
-              </button>
+              </UiNativeButton>
             </>
           )}
           {op === "pdf-split" && (
             <>
               <label>
                 Split mode
-                <select
+                <UiNativeSelect
                   value={split}
                   onChange={(e) => setSplit(e.target.value)}
                 >
                   <option value="ranges">Page ranges</option>
                   <option value="individual">Individual pages</option>
                   <option value="interval">Equal intervals</option>
-                </select>
+                </UiNativeSelect>
               </label>
               {split === "ranges" && (
                 <label>
                   Groups (semicolon separated)
-                  <input
+                  <UiNativeInput
                     value={range}
                     onChange={(e) => setRange(e.target.value)}
                     placeholder="1-3;4-6"
@@ -763,7 +767,7 @@ export default function PdfWorkspace({
               {split === "interval" && (
                 <label>
                   Pages per document
-                  <input
+                  <UiNativeInput
                     type="number"
                     min="1"
                     value={interval}
@@ -792,19 +796,19 @@ export default function PdfWorkspace({
               </p>
               <label>
                 Insert position
-                <select
+                <UiNativeSelect
                   value={position}
                   onChange={(e) => setPosition(e.target.value)}
                 >
                   {["beginning", "end", "before", "after"].map((p) => (
                     <option key={p}>{p}</option>
                   ))}
-                </select>
+                </UiNativeSelect>
               </label>
               {["before", "after"].includes(position) && (
                 <label>
                   Primary page
-                  <input
+                  <UiNativeInput
                     type="number"
                     min="1"
                     max={pages.length}
@@ -818,7 +822,7 @@ export default function PdfWorkspace({
                   <p>Primary document · choose insertion page</p>
                   <div className="pdf-grid pdf-primary-pages">
                     {primary.pdf.getPageIndices().map((index) => (
-                      <button
+                      <UiNativeButton
                         key={index}
                         type="button"
                         aria-label={`Insert relative to page ${index + 1}`}
@@ -827,7 +831,7 @@ export default function PdfWorkspace({
                       >
                         <Thumbnail source={primary} index={index} />
                         <span>{index + 1}</span>
-                      </button>
+                      </UiNativeButton>
                     ))}
                   </div>
                 </section>
@@ -838,7 +842,7 @@ export default function PdfWorkspace({
             <>
               <label>
                 Compression
-                <select
+                <UiNativeSelect
                   value={
                     quality < 40 ? "high" : quality < 75 ? "medium" : "low"
                   }
@@ -855,17 +859,11 @@ export default function PdfWorkspace({
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
-                </select>
+                </UiNativeSelect>
               </label>
               <label>
                 Image quality {quality}%
-                <input
-                  type="range"
-                  min="10"
-                  max="95"
-                  value={quality}
-                  onChange={(e) => setQuality(Number(e.target.value))}
-                />
+                <ShadcnSlider aria-label="Image quality" min={10} max={95} value={[quality]} onValueChange={([value]) => setQuality(value)} />
               </label>
               <p>
                 Rebuilds pages as JPEG images. Selectable text and vector
@@ -883,7 +881,7 @@ export default function PdfWorkspace({
                 Secure redaction rebuilds every page as pixels. Text, vectors,
                 annotations, attachments and document metadata are discarded.
               </p>
-              <button
+              <UiNativeButton
                 type="button"
                 onClick={() => {
                   setRegions((r) => r.slice(0, -1));
@@ -891,12 +889,11 @@ export default function PdfWorkspace({
                 }}
               >
                 Undo region
-              </button>
+              </UiNativeButton>
               <label>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={confirmed}
-                  onChange={(e) => setConfirmed(e.target.checked)}
+                  onCheckedChange={(checked) => setConfirmed(checked === true)}
                 />
                 I confirm permanent rasterization and removal of marked content.
               </label>
@@ -907,7 +904,7 @@ export default function PdfWorkspace({
               {metadataKeys.map((key) => (
                 <label key={key}>
                   {key}
-                  <input
+                  <UiNativeInput
                     value={meta[key] || ""}
                     onChange={(e) =>
                       setMeta((v) => ({ ...v, [key]: e.target.value }))
@@ -930,7 +927,7 @@ export default function PdfWorkspace({
             <>
               <label>
                 Image format
-                <select
+                <UiNativeSelect
                   value={format}
                   onChange={(e) => setFormat(e.target.value)}
                 >
@@ -942,11 +939,11 @@ export default function PdfWorkspace({
                     .startsWith("data:image/webp") && (
                     <option value="webp">WebP</option>
                   )}
-                </select>
+                </UiNativeSelect>
               </label>
               <label>
                 Resolution
-                <select
+                <UiNativeSelect
                   value={dpi}
                   onChange={(e) => setDpi(Number(e.target.value))}
                 >
@@ -955,7 +952,7 @@ export default function PdfWorkspace({
                       {n} DPI
                     </option>
                   ))}
-                </select>
+                </UiNativeSelect>
               </label>
             </>
           )}

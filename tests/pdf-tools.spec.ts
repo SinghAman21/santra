@@ -182,6 +182,10 @@ test("compression reports measured size and image export preserves page number",
   page,
 }) => {
   await mount(page, "compress");
+  const quality = page.getByRole("slider", { name: "Image quality" });
+  await quality.focus();
+  await quality.press("ArrowRight");
+  await expect(quality).toHaveAttribute("aria-valuenow", "66");
   const bytes = await output(page);
   expect((await PDFDocument.load(bytes)).getPageCount()).toBe(3);
   await expect(page.getByRole("status")).toContainText("No savings");

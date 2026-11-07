@@ -1,3 +1,4 @@
+import { Input as UiNativeInput, NativeSelect as UiNativeSelect } from './ui/primitives';
 import type { Capability } from './types';
 
 interface Props { capability: Capability; values: Record<string, string>; onChange: (values: Record<string, string>) => void }
@@ -11,7 +12,7 @@ export default function OperationFields({ capability, values, onChange }: Props)
     const range = definition && typeof definition === 'object' && !Array.isArray(definition) ? definition as { min?: number; max?: number } : null;
     const value = values[key] ?? defaults[key] ?? '';
     return <label className="field-label" key={key}>{labels[key] || key}
-      {choices ? <select aria-label={labels[key] || key} value={value} onChange={event => onChange({ ...values, [key]: event.target.value })}>{choices.map(choice => <option value={String(choice)} key={String(choice)}>{String(choice)}</option>)}</select> : <input aria-label={labels[key] || key} type={range ? 'number' : 'text'} min={range?.min} max={range?.max} step={['start','duration','end'].includes(key) ? '0.1' : '1'} placeholder={defaults[key] || String(definition || '')} value={value} onChange={event => onChange({ ...values, [key]: event.target.value })}/>}
+      {choices ? <UiNativeSelect aria-label={labels[key] || key} value={value} onChange={event => onChange({ ...values, [key]: event.target.value })}>{choices.map(choice => <option value={String(choice)} key={String(choice)}>{String(choice)}</option>)}</UiNativeSelect> : <UiNativeInput aria-label={labels[key] || key} type={range ? 'number' : 'text'} min={range?.min} max={range?.max} step={['start','duration','end'].includes(key) ? '0.1' : '1'} placeholder={defaults[key] || String(definition || '')} value={value} onChange={event => onChange({ ...values, [key]: event.target.value })}/>}
     </label>;
   })}</div>;
 }

@@ -1,3 +1,5 @@
+import { Checkbox } from '../../common/ui/checkbox';
+import { Button as UiNativeButton, Input as UiNativeInput, NativeSelect as UiNativeSelect } from '../../common/ui/primitives';
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -255,10 +257,10 @@ export default function SpreadsheetEditor({
                   .then((bytes) => loadBytes(new Uint8Array(bytes), file.name));
             }}
           >
-            <button type="button" disabled={busy} onClick={() => void choose()}>
+            <UiNativeButton type="button" disabled={busy} onClick={() => void choose()}>
               Choose workbook
-            </button>
-            <input
+            </UiNativeButton>
+            <UiNativeInput
               ref={input}
               type="file"
               hidden
@@ -277,14 +279,14 @@ export default function SpreadsheetEditor({
             {names.length > 0 && (
               <label>
                 Preview worksheet
-                <select
+                <UiNativeSelect
                   value={active}
                   onChange={(e) => setActive(e.target.value)}
                 >
                   {names.map((n) => (
                     <option key={n}>{n}</option>
                   ))}
-                </select>
+                </UiNativeSelect>
               </label>
             )}
             <div
@@ -297,7 +299,7 @@ export default function SpreadsheetEditor({
           <>
             <label>
               Output format
-              <select
+              <UiNativeSelect
                 value={format}
                 onChange={(e) => {
                   setFormat(e.target.value);
@@ -310,19 +312,18 @@ export default function SpreadsheetEditor({
                     {f === "pdf" ? " · layout-limited" : ""}
                   </option>
                 ))}
-              </select>
+              </UiNativeSelect>
             </label>
             <fieldset>
                 <legend>Select worksheets</legend>
                 {names.map((n) => (
                   <label key={n}>
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       name="sheet-choice"
                       checked={chosen.includes(n)}
-                      onChange={(e) =>
+                      onCheckedChange={(checked) =>
                         setChosen((v) =>
-                          e.target.checked ? [...v, n] : v.filter((x) => x !== n),
+                          checked === true ? [...v, n] : v.filter((x) => x !== n),
                         )
                       }
                     />
@@ -333,10 +334,9 @@ export default function SpreadsheetEditor({
             {op === "strip-metadata" && <p>{lossWarning}</p>}
             {op === "strip-metadata" && (
               <label>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={confirmed}
-                  onChange={(e) => setConfirmed(e.target.checked)}
+                  onCheckedChange={(checked) => setConfirmed(checked === true)}
                 />
                 I understand the loss warning. Remove supported workbook
                 properties and custom properties before rewriting.

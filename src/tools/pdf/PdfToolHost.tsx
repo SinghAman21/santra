@@ -22,6 +22,6 @@ export default function PdfToolHost() {
     })();
     return () => { active = false; unlisten?.(); };
   }, []);
-  if (context) return <PdfWorkspace key={context.id} files={context.files} capability={context.capability} format={context.format} initialOptions={{}} onApply={() => {}} loadPreview={async () => ({ url: "" })} onClose={() => { setContext(null); void getCurrentWindow().hide(); }} />;
+  if (context) return <PdfWorkspace key={context.id} files={context.files} capability={context.capability} format={context.format} initialOptions={{}} onApply={() => {}} loadPreview={async () => ({ url: "" })} onClose={() => { void getCurrentWindow().hide().then(() => setContext(null)).catch(reason => setError(String(reason))); }} />;
   return <main className="tool-host-state" role={error ? "alert" : "status"}>{error || "Opening PDF tools…"}</main>;
 }

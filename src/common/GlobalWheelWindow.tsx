@@ -1,3 +1,4 @@
+import { NativeButton as UiNativeButton } from './ui/primitives';
 import { operationIcons, operationLabels } from './wheel-profiles';
 import { hintedFiles, wheelFamily } from './file-kind';
 import { Copy, FolderInput, Link, TerminalSquare, ScanEye, Palette, Paintbrush } from 'lucide-react';
@@ -239,6 +240,6 @@ export default function GlobalWheelWindow() {
         hideDescription={!(mode === 'convert' && externalFiles.some(file => file.category === 'document'))}
       />
     </div>
-    <button className="global-wheel-cancel" onClick={() => void api.finishGlobalWheel?.('background')} aria-label="Close drop wheel">×</button>
+    <UiNativeButton className="global-wheel-cancel" onClick={() => void api.finishGlobalWheel?.('background')} aria-label="Close drop wheel">×</UiNativeButton>
   </main>;
 }

@@ -14,8 +14,8 @@
 .image-tool-preview-toolbar>div { display: flex; align-items: center; gap: 10px; }
 .image-tool-fit { min-height: 36px; min-width: 60px; border: 1px solid #e0e3dd; border-radius: 8px; color: #33372e; font-size: 13px; background: #fff; }
 .image-tool-navigation { position: relative; }
-.image-tool-navigation summary { cursor: pointer; font-size: 11px; }
-.image-tool-navigation[open] { z-index: 8; }
+.image-tool-navigation > button { cursor: pointer; font-size: 11px; }
+.image-tool-navigation[data-state="open"] { z-index: 8; }
 .image-tool-navigation .image-tool-zoom { position: absolute; top: auto; bottom: 35px; right: -68px; }
 .image-tool-navigation .image-tool-pan { position: absolute; top: auto; bottom: 88px; right: -68px; }
 .image-tool-dimensions { display: none; }

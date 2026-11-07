@@ -1,26 +1,21 @@
+import * as SelectPrimitive from '@radix-ui/react-select';
 import { ChevronDown } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId } from 'react';
 
 type Option = { value: string; label: string };
 
-/** A compact, keyboard-operable select that does not rely on platform popup bounds. */
+/** Shadcn-style Radix select for compact image controls. */
 export function Select({ label, value, options, onChange }: { label: string; value: string; options: Option[]; onChange: (value: string) => void }) {
   const id = useId();
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const selected = options.find(option => option.value === value) || options[0];
-  useEffect(() => {
-    const close = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
-  }, []);
-  return <div className="image-tool-select" ref={root}>
+  return <div className="image-tool-select">
     <span id={`${id}-label`}>{label}</span>
-    <button type="button" className="image-tool-select-trigger" aria-labelledby={`${id}-label ${id}-value`} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(current => !current)} onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); } }}>
-      <span id={`${id}-value`}>{selected?.label || label}</span><ChevronDown size={15} aria-hidden="true"/>
-    </button>
-    {open && <div className="image-tool-select-menu" role="listbox" aria-labelledby={`${id}-label`}>
-      {options.map(option => <button key={option.value} type="button" role="option" aria-selected={option.value === value} onClick={() => { onChange(option.value); setOpen(false); }}>{option.label}</button>)}
-    </div>}
+    <SelectPrimitive.Root value={value} onValueChange={onChange}>
+      <SelectPrimitive.Trigger className="image-tool-select-trigger" aria-labelledby={`${id}-label ${id}-value`}>
+        <SelectPrimitive.Value id={`${id}-value`} placeholder={label}/><SelectPrimitive.Icon><ChevronDown size={15} aria-hidden="true"/></SelectPrimitive.Icon>
+      </SelectPrimitive.Trigger>
+      <SelectPrimitive.Content position="popper" sideOffset={4} className="santra-select-content">
+        <SelectPrimitive.Viewport>{options.map(option => <SelectPrimitive.Item key={option.value} value={option.value} className="santra-select-item"><SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText></SelectPrimitive.Item>)}</SelectPrimitive.Viewport>
+      </SelectPrimitive.Content>
+    </SelectPrimitive.Root>
   </div>;
 }

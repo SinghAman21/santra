@@ -1,3 +1,6 @@
+import { Checkbox } from '../../common/ui/checkbox';
+import { Slider as ShadcnSlider } from '../../common/ui/slider';
+import { Button as UiNativeButton, Input as UiNativeInput, NativeSelect as UiNativeSelect } from '../../common/ui/primitives';
 import ReferenceEditor from '../../common/ReferenceEditor';
 import { decimal, clock, type Mask, type Preview } from './media';
 import './video-tool-window.css';
@@ -190,14 +193,14 @@ export default function VideoToolWindow({ capability, files: originalFiles, form
             {operation === 'redact' && masks.map((mask, index) => <div className="video-tool-box video-tool-mask" key={`${index}-${mask.x}-${mask.y}`} style={{ ...selectionStyle(mask), backgroundColor: mask.color }} aria-label={`Redaction mask ${index + 1}`}>{index + 1}</div>)}
             {preview?.width && preview.height && <span className="video-tool-dimensions">{preview.width} × {preview.height} px</span>}
           </div>
-          <div className="video-tool-transport"><button type="button" aria-label="Seek backward one second" onClick={() => seek(playhead - 1)}><RotateCcw size={15}/></button><button type="button" aria-label="Play video" onClick={() => void videoRef.current?.play()}><Play size={15}/></button><button type="button" aria-label="Pause video" onClick={() => videoRef.current?.pause()}><Pause size={15}/></button><span>{clock(playhead)} / {clock(duration)}</span></div>
-          <input className="video-tool-seek" aria-label="Video preview timeline" type="range" min="0" max={Math.max(Math.min(duration, preview?.previewDuration || duration), 0.01)} step="0.01" value={Math.min(playhead, preview?.previewDuration || duration || playhead)} onChange={event => seek(Number(event.target.value))} disabled={!duration}/>
+          <div className="video-tool-transport"><UiNativeButton type="button" aria-label="Seek backward one second" onClick={() => seek(playhead - 1)}><RotateCcw size={15}/></UiNativeButton><UiNativeButton type="button" aria-label="Play video" onClick={() => void videoRef.current?.play()}><Play size={15}/></UiNativeButton><UiNativeButton type="button" aria-label="Pause video" onClick={() => videoRef.current?.pause()}><Pause size={15}/></UiNativeButton><span>{clock(playhead)} / {clock(duration)}</span></div>
+          <ShadcnSlider className="video-tool-seek" aria-label="Video preview timeline" min={0} max={Math.max(Math.min(duration, preview?.previewDuration || duration), 0.01)} step={0.01} value={[Math.min(playhead, preview?.previewDuration || duration || playhead)]} onValueChange={([value]) => seek(value)} disabled={!duration}/>
           {preview?.previewDuration && <p className="video-tool-fileinfo">Playback previews the first 30 seconds. Time fields can target the full source.</p>}
           <p className="video-tool-fileinfo">{file?.size ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : ''}{preview?.width && preview.height ? ` · ${preview.width} × ${preview.height}` : ''}{duration ? ` · ${clock(duration)}` : ''}</p>
         </div>
 </>} settings={<div className="video-tool-controls">
 
-          {outputFormats.length > 1 && <label className="video-tool-field">Output format<select aria-label="Output format" value={format} onChange={event => setFormat(event.target.value)}>{outputFormats.map(output => <option key={output} value={output}>{output.toUpperCase()}</option>)}</select></label>}
+          {outputFormats.length > 1 && <label className="video-tool-field">Output format<UiNativeSelect aria-label="Output format" value={format} onChange={event => setFormat(event.target.value)}>{outputFormats.map(output => <option key={output} value={output}>{output.toUpperCase()}</option>)}</UiNativeSelect></label>}
           {operation === 'compress' && <CompressControls values={values} set={set}/ >}
           {operation === 'trim' && <TrimControls duration={duration} values={values} set={set} playhead={playhead}/ >}
           {operation === 'split' && <SplitControls segmentsText={segmentsText} set={set} playhead={playhead} duration={duration}/ >}
@@ -213,7 +216,7 @@ export default function VideoToolWindow({ capability, files: originalFiles, form
           {operation === 'merge' && <MergeControls values={values} set={set} files={files} setFiles={setFiles}/ >}
           {operation === 'redact' && <RedactControls masks={masks} duration={duration} setMasks={setMasks} values={values} set={set}/ >}
           {operation === 'strip-metadata' && <StripMetadataControls preview={preview} previewError={previewError}/ >}
-          {operation === 'compress' && <label className="video-tool-check"><input type="checkbox" checked={values.stripMetadata === 'true'} onChange={event => set('stripMetadata', String(event.target.checked))}/> Remove copied metadata</label>}
+          {operation === 'compress' && <label className="video-tool-check"><Checkbox checked={values.stripMetadata === 'true'} onCheckedChange={checked => set('stripMetadata', String(checked === true))}/> Remove copied metadata</label>}
 
         </div>} notice={validation || error || capability.warning || 'The original is kept. Output is processed locally.'} error={Boolean(error)} output={`New ${format.toUpperCase()} copy · ${file?.name || 'selection'}`} busy={busy} disabled={Boolean(validation)} onClose={onClose} onReset={()=>{setValues(Object.fromEntries(Object.entries(initialOptions).map(([key,value])=>[key,String(value)])));setFiles(originalFiles);setFormat(initialFormat);setFrames([]);setMasks(Array.isArray(initialOptions.masks)?initialOptions.masks as Mask[]:[]);setError('');seek(0)}} onSubmit={apply}/>;
 }

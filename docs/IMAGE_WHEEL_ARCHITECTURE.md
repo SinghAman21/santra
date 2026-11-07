@@ -310,3 +310,7 @@ and formatting fidelity can be lost. It is not a forensic metadata scrubber.
 Native Windows and GNOME drag/print dialog behavior still requires manual checks.
 
 Document Shift routes are exposed per input only after a sandboxed Pandoc conversion probe succeeds for that reader and writer pair. Supported candidates are DOCX, Markdown, HTML, EPUB and TXT; the wheel warns about possible fidelity loss before conversion.
+
+PDF and spreadsheet tool hosts have scoped window visibility permissions, and compact tool windows use transparent, rounded surfaces. Shared dialog and form component primitives retain local tool behavior.
+
+Tool dialogs and common controls use shared shadcn components with Radix dialog, checkbox, slider, select and collapsible primitives. File and colour pickers use browser-native inputs; previews and the citrus wheel retain their specialized rendering.

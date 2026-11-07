@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "tool-window",
+  "description": "Show and hide the PDF and spreadsheet tool windows.",
+  "windows": [
+    "pdf",
+    "spreadsheet"
+  ],
+  "permissions": [
+    "core:window:allow-hide",
+    "core:window:allow-show"
+  ]
+}
