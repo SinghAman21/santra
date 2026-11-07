@@ -7,6 +7,7 @@ export interface Settings { theme: string; outputFolder: string; collision: stri
 export interface Snapshot { files: LocalFile[]; jobs: Job[]; settings: Settings; backends: Record<string, Backend>; capabilities: Capability[]; platform: string }
 export interface ImageEditorContext { id?: string; capability: Capability; files: LocalFile[]; format: string; options: Record<string, string> }
 export interface VideoEditorContext { id?: string; capability: Capability; files: LocalFile[]; format: string; options: Record<string, unknown> }
+export interface AudioEditorContext { id?: string; capability: Capability; files: LocalFile[]; format: string; options: Record<string, string> }
 export interface Bridge {
   videoTimelineThumbnails?: (request: {start:number;end:number;count:number;width:number}) => Promise<{frames:{time:number;url:string}[]}>;
   bootstrap(): Promise<Snapshot>;
@@ -37,6 +38,11 @@ export interface Bridge {
   openVideoTool?(request: { capabilityId: string; files: string[]; format: string; options: Record<string, string> }): Promise<unknown>;
   applyVideoTool?(request: { format?: string; files?: string[]; options: Record<string, unknown> }): Promise<unknown>;
   closeVideoTool?(): Promise<unknown>;
+  audioToolContext?(): Promise<AudioEditorContext>;
+  onAudioToolContext?(callback: (context: AudioEditorContext) => void): () => void;
+  openAudioTool?(request: { capabilityId: string; files: string[]; format: string; options: Record<string, string> }): Promise<unknown>;
+  applyAudioTool?(request: { format?: string; options: Record<string, string> }): Promise<unknown>;
+  closeAudioTool?(): Promise<unknown>;
   onWheelMode?(callback: (mode: string, newDrag?: boolean) => void): () => void;
   finishGlobalWheel?(page?: 'converter' | 'activity' | 'background', notice?: string): Promise<void>;
   currentWheelMode?(): Promise<string>;

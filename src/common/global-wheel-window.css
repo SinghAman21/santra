@@ -20,28 +20,33 @@ html.global-wheel-document body { min-width: 0; }
   background: transparent;
 }
 
+/* The wheel overlay must be one seamless circle. Never paint a card, panel,
+   border, or blur behind it: Windows composites this window per pixel. */
 .global-wheel-card {
   width: 380px;
   max-width: 100vw;
-  padding: 8px;
-  border: 1px solid #fff9;
-  border-radius: 26px;
-  background: #ffffff;
-  box-shadow: 0 16px 56px #38200a55;
-  backdrop-filter: blur(14px);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .global-wheel-card .citrus-wheel { width: 360px; margin: auto; }
 .global-wheel-error { margin: 8px 12px; color: #ff5a00; font-size: 12px; line-height: 1.4; }
+/* Sit on the rim of the circle instead of in the empty corner of the window
+   rectangle, so nothing suggests a box around the wheel. */
 .global-wheel-cancel {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: calc(50% - var(--wheel-diameter, 440px) / 2 - 6px);
+  right: calc(50% - var(--wheel-diameter, 440px) / 2 - 6px);
   width: 28px;
   height: 28px;
   border: 1px solid #edc8a0;
   border-radius: 50%;
   background: #ffffff;
+  box-shadow: 0 4px 14px #38200a33;
   color: #69452f;
   font-size: 18px;
   line-height: 1;

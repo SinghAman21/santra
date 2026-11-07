@@ -33,6 +33,15 @@
 .reference-editor .video-tool-field { font-size:13px; }
 .reference-editor .video-tool-note { font-size:12px; line-height:18px; }
 .reference-editor .audio-preview { flex:1; min-height:0; }
+.reference-editor-modal.reference-editor-stacked { width:min(1120px,calc(100vw - 20px)); height:min(940px,calc(100dvh - 20px)); }
+.reference-editor-stacked .reference-editor-body { display:flex; flex-direction:column; gap:12px; padding:14px 22px 0; }
+.reference-editor-stacked .reference-editor-preview { flex:1 1 auto; min-height:250px; }
+.reference-editor-stacked .reference-editor-settings { flex:0 0 auto; max-height:40%; overflow:auto; padding-bottom:6px; }
+.reference-editor-stacked .reference-editor-settings fieldset { display:block; }
+.reference-editor-stacked .reference-editor-footer { min-height:72px; padding:12px 22px; }
+.video-settings-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:12px 16px; align-items:start; }
+.video-settings-wide { grid-column:1 / -1; }
+@media(max-width:700px) { .reference-editor-stacked .reference-editor-settings { max-height:none; overflow:visible; } .reference-editor-stacked .reference-editor-body { overflow:auto; } }
 @media(max-width:700px) { .reference-editor-body { grid-template-columns:minmax(0,1fr); overflow:auto; } .reference-editor-preview { min-height:220px; } .reference-editor-settings { overflow:visible; } .reference-editor-footer { flex-wrap:wrap; padding:12px 16px; } .reference-editor-footer>div { flex-basis:100%; } .reference-editor-footer nav { margin-left:auto; } }
 .conversion-facts { display:grid; gap:12px; margin:0; font-size:13px; line-height:18px; }
 .conversion-facts dt { color:#6f7368; }

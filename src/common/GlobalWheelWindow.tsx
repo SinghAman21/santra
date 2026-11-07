@@ -27,9 +27,10 @@ const imageToolLabels: Record<string, string> = {
   crop: 'Crop', resize: 'Resize', rotate: 'Rotate & flip', flip: 'Flip', metadata: 'Metadata',
 };
 const videoToolLabels: Record<string, string> = {
-  compress: 'Compress', trim: 'Trim', split: 'Split', merge: 'Merge', crop: 'Crop', speed: 'Speed',
-  snapshot: 'Frames', mute: 'Mute', redact: 'Redact', 'strip-metadata': 'Delete metadata', resize: 'Resize',
-  rotate: 'Rotate', flip: 'Flip', gif: 'GIF', 'extract-audio': 'Extract audio',
+  compress: 'Compress', trim: 'Trim', split: 'Split', merge: 'Merge', 'crop-resize': 'Crop & resize', speed: 'Speed',
+  'frames-gif': 'Frames & GIF', 'audio-output': 'Mute & extract audio', redact: 'Redact', 'strip-metadata': 'Delete metadata',
+  'rotate-flip': 'Rotate & flip', crop: 'Crop', resize: 'Resize', rotate: 'Rotate', flip: 'Flip', gif: 'GIF',
+  snapshot: 'Frames', mute: 'Mute', 'extract-audio': 'Extract audio',
 };
 export default function GlobalWheelWindow() {
   const [snapshot, setSnapshot] = useState<Snapshot>({ files: [], jobs: [], capabilities: [], backends: {}, settings: defaultSettings, platform: 'unknown' });

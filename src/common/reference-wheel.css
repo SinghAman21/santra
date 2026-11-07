@@ -23,6 +23,8 @@
 
 .image-wheel-thumbnail video { width: 100%; height: 100%; object-fit: cover; border-radius: 7px; }
 .reference-wheel-empty { width:100%; min-height:360px; padding:48px 32px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:16px; text-align:center; background:#fff; border:1px solid #d6dfe0; border-radius:24px; }
+/* The global overlay shows only the ring. An empty state is text, never a panel. */
+.reference-wheel-shell .reference-wheel-empty { background:transparent; border:0; min-height:0; padding:24px; }
 .reference-wheel-empty h2 { font-size:20px; line-height:28px; margin:0; font-weight:600; }
 .reference-wheel-empty p { font-size:13px; line-height:20px; color:#6f7368; margin:0; }
 .reference-wheel[data-family=video] .citrus-label { font-size:11px; width:80px; }

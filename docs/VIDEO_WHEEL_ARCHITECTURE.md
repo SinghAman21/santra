@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-The first implementation is in the current source tree: capability-gated wheel slices open a compact video editor, and accepted settings enqueue a non-destructive local FFmpeg job. This is not full format parity or release validation. The backend must detect the required FFmpeg/FFprobe codecs, muxers, and filters before a route appears. Audio editor behavior remains proposal-only in `docs/AUDIO_WHEEL_ARCHITECTURE.md`.
+The first implementation is in the current source tree: capability-gated wheel slices open a compact video editor, and accepted settings enqueue a non-destructive local FFmpeg job. This is not full format parity or release validation. The backend must detect the required FFmpeg/FFprobe codecs, muxers, and filters before a route appears. Audio tools open an independent audio editor window; see `docs/AUDIO_WHEEL_ARCHITECTURE.md`.
 
 The inspiration is the interaction and editor layout shown in `reference-tools/video/vid.png` through `vid4.png`. These are visual references only. Santra keeps its own citrus identity, copy, icons, and Windows/Linux conventions; no Tangerine branding or macOS shortcuts are used.
 
@@ -27,8 +27,8 @@ Show only output routes verified for the source streams and installed encoders/m
 
 Use a dynamic, labeled tool wheel with these candidate actions, filtered by selection and backend capability:
 
-- **Compress**, **Trim**, **Split**, **Crop**, **Speed**, **Snapshot / Frames**, **Mute**, **Redact**, and **Metadata**.
-- **Merge** appears for compatible multi-video selections; otherwise it is not shown.
+- **Compress**, **Trim**, **Split**, **Merge** (multi-file), **Crop & resize**, **Rotate & flip**, **Speed**, **Frames & GIF**, **Mute & extract audio**, **Redact**, and **Metadata**.
+- Merged tools keep the wheel short: frame capture and GIF share one surface, and mute/extract-audio switch mode from the chosen output format (video container = muted video, audio container = extracted first audio stream).
 - Metadata actions must describe their actual scope (inspect, edit, or remove); do not label metadata removal as editing.
 - Tools that cannot safely apply to all selected files are hidden or marked as partial before confirmation.
 
@@ -41,18 +41,18 @@ Each selected tool opens a small, independent Santra window—not the full dashb
 ```text
 ┌ Tool name                                      Close ┐
 │                                                      │
-│               Video preview (contain-fit)            │
+│               Video preview (full width)             │
 │           black letterbox; no clipped frames         │
 │                                                      │
-│  playback controls  current time / duration          │
-│  timeline or filmstrip with visible selection        │
+│  transport   play/pause/replay   seek   time readout │
+│                                                      │
 │  tool-specific controls and exact numeric values     │
 │                                                      │
-│  Cancel                      Save as new video       │
+│  Cancel                      Save as new copy        │
 └──────────────────────────────────────────────────────┘
 ```
 
-The preview uses local decoding and fits the complete frame inside the viewport. The timeline is scrub-able and supports keyboard focus, arrow-key frame/time steps, and editable time fields where relevant. Keep preview, selection, and export settings visually distinct. Show the output name, container, and whether audio/video will be re-encoded before Apply. Preview is an estimate; the final export uses the validated settings shown in the editor.
+The preview owns the full width above the controls, so cropping, masking, and framing are judged against the whole frame. Playback state comes from the HTML media element itself: controls stay disabled until metadata is ready, `play`/`pause`/`ended` events drive the transport, and a playback failure is shown over the stage instead of silently disabling buttons. The timeline is scrub-able and keyboard focusable; editable time fields carry the exact values. Keep preview, selection, and export settings visually distinct. Show the output name and container before Apply. Preview is an estimate; the final export uses the validated settings shown in the editor.
 
 ## Tool-specific visual behavior
 
@@ -60,9 +60,9 @@ The preview uses local decoding and fits the complete frame inside the viewport.
 
 Show the video preview above a horizontal timeline/filmstrip. Use two high-contrast draggable handles for start and end, a shaded excluded region, and exact start/end time fields. Include play, pause, frame-step, and “play selection” controls. Display selected duration and whether stream-copy trim is possible or re-encoding is required.
 
-### Crop
+### Crop & resize
 
-Overlay a visible crop rectangle with edge/corner handles over the full contained frame. Provide aspect presets plus Free and Custom, and editable output width/height. Keep the frame uncropped in the preview, show the resulting dimensions, and disclose re-encoding. Audio is preserved unless the user explicitly changes the audio option.
+Reuse the image crop interaction: a visible rectangle with edge/corner handles that can be drawn, moved, and resized over the full contained frame. Provide aspect presets plus Free and Custom, and editable output width/height. Keep the frame uncropped in the preview, show the resulting dimensions, and validate even dimensions inside the source frame. Audio is preserved unless the user explicitly changes the audio option. Rotate and flip share a separate single surface.
 
 ### Compress
 
@@ -74,23 +74,23 @@ Use a prominent speed slider with a small number of labeled presets (for example
 
 ### Split
 
-Show the same scrubber with draggable split markers, time readouts, and an equal-parts control. List the resulting segment durations/count before export. Validate that ranges are non-empty, ordered, and within the source duration; show the predictable numbered output names.
+Show the scrubber and a multi-track timeline where every clip is an independent track. Each track carries its own start/end fields, computed duration, delete control, and output index; new clips are added as a new track instead of being constrained by track 1. Ranges may overlap or repeat. Validate that each range is non-empty, starts at or after zero, and stays within the source duration; show the predictable numbered output names.
 
 ### Merge
 
 Use an ordered clip list with local thumbnails, names, durations, and move-up/down controls (drag reordering may supplement, never replace, keyboard controls). Show the chosen output container and compatibility result. Explain when stream-copy is valid; if streams are incompatible, offer a clearly identified re-encode path rather than silently changing quality or codecs.
 
-### Snapshot / Extract Frames
+### Frames & GIF
 
-Show a preview and seek bar, with “Add frame” capturing the currently displayed timestamp. Present selected frames as a removable thumbnail tray, with timestamp and full-resolution output dimensions. Let users choose a frame interval or specific snapshots, and preview the output naming pattern before saving an image sequence.
+One surface covers still-frame export and animated GIF creation. Frame mode captures the current playhead into a removable timestamp list, and each saved frame becomes its own validated local job. GIF mode takes a start/end range, frame rate, and width. Do not show a frame-rate control for still frames or a frame list for GIFs.
 
-### Mute
+### Mute & extract audio
 
-Keep this editor deliberately simple: video preview, audio-present status, a clear remove-audio action, and a new-output summary. Do not use a mute toggle that implies only playback muting if the exported file will have its audio stream removed.
+One surface covers both directions: the chosen output format decides the mode. A video container removes the audio stream; an audio container extracts the first audio stream. Show audio-present status, the selected output format, and a new-output summary. Do not use a playback mute toggle that implies the saved file keeps its audio.
 
 ### Redact
 
-Allow one or more visible solid/blur masks over the preview, with color/style controls and a separate time interval per mask shown as timeline tracks. State explicitly whether masks stay at fixed frame coordinates or are tracked. Do not claim face detection or motion tracking unless a verified local capability exists. Warn that an untracked mask can miss a moving subject; never imply that visual blur guarantees recovery-proof redaction.
+Allow one or more visible masks over the preview as fixed-position tracks. Shapes are rectangle, circle, triangle, and freehand pencil; masks are filled by default with an outline-only option, and each track has its own time interval shown on the timeline. Rasterized shape masks are composited locally with time-gated overlays, while filled rectangles use `drawbox`. Masks stay at fixed frame coordinates: do not claim face detection, motion tracking, or recovery-proof privacy redaction. Warn that an untracked mask can miss a moving subject.
 
 ### Metadata
 
@@ -107,11 +107,13 @@ Start with locally inspected stream/container fields and readable field names. O
 
 ## Implemented behavior and remaining verification
 
-The current wheel/editor includes capability-gated conversion and these local tools: compress, trim, split, compatible merge with re-encode choice and clip ordering, crop, resize, rotate, flip, speed, snapshot frames, mute, GIF creation, audio extraction, solid time-ranged redaction, and metadata deletion. The preloaded editor receives a fresh context on each open. Outputs are new files dispatched to the local engine; originals remain untouched. The editor uses the primary streams and reports re-encoding/metadata limitations.
+The current wheel/editor includes capability-gated conversion and these local tools: compress, trim, multi-track split, compatible merge with re-encode choice and clip ordering, merged crop & resize, merged rotate & flip, speed, merged frames & GIF, merged mute & extract audio, multi-track shape redaction, and metadata deletion. The preloaded editor receives a fresh context on each open. Outputs are new files dispatched to the local engine; originals remain untouched. The editor uses the primary streams and reports re-encoding/metadata limitations.
 
-Redaction is a fixed-position solid color `drawbox`, not blur, face detection, or motion tracking. It must not be treated as recovery-proof privacy redaction when content moves. Metadata deletion removes copied tags and chapters where FFmpeg supports it; encoder/container-generated tags may remain. Compression may make an output larger. Merge validates stream compatibility and defaults to re-encoding; direct stream-copy is opt-in and may reject differing stream layouts/settings.
+The video editor opens as an independent visible window with a stacked layout: the preview spans the full width above the controls, and the settings scroll beneath it. Playback state is read from the HTML media element (`ready`, `playing`, `ended`, `error`) so play/pause/replay cannot drift from the actual element; transport controls stay disabled until metadata loads and a load/playback failure is displayed over the stage. Frame export from the merged Frames & GIF surface expands into one job per timestamp.
 
-Remaining verification: run typecheck/unit/E2E/desktop tests, exercise all routes against generated fixtures and each installed FFmpeg build, then manually test pointer-near wheel placement and real Explorer/GNOME drag handoff. Native-platform manual tests and packaged artifact checks are not implied by automated tests.
+Redaction draws fixed-position masks as rectangle, circle, triangle, or freehand pencil, filled by default with an outline-only toggle. Filled rectangles use `drawbox`; other shapes are rasterized to transparent overlay PNGs and composited with a time-gated `overlay`, so each mask is bounded by its own start/end interval. This is not blur, face detection, or motion tracking. It must not be treated as recovery-proof privacy redaction when content moves. Metadata deletion removes copied tags and chapters where FFmpeg supports it; encoder/container-generated tags may remain. Compression may make an output larger. Merge validates stream compatibility and defaults to re-encoding; direct stream-copy is opt-in and may reject differing stream layouts/settings.
+
+Remaining verification: run typecheck/unit/E2E/desktop tests, exercise all routes against generated fixtures and each installed FFmpeg build, then manually test pointer-near wheel placement and real Explorer/GNOME drag handoff. The Rust toolchain was unavailable during this pass, so backend changes still need a `cargo check`/`cargo test` on a machine with Rust installed. Native-platform manual tests and packaged artifact checks are not implied by automated tests.
 
 ## UI source migration (Penpot frame 02)
 

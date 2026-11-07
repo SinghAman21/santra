@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-**Reference proposal with implemented subset.** The dedicated audio UI now supports detected normalize, trim, channels, visualize, compress, and metadata-removal routes; see [UI structure](UI_STRUCTURE.md). The remaining interaction details below describe a possible audio wheel and editor experience from the visible assets in `reference-tools/audio/`. It does not state that any audio wheel route, editor, backend, or conversion is implemented. The capability registry remains the source of truth.
+**Reference proposal with implemented subset.** Audio tools now open an independent audio editor window, and the registry supports detected normalize, trim, channels, visualize, compress, split, merge, metadata-removal, and conversion routes. The editor surfaces normalize, channels, trim, visualize, compress, and metadata removal; split, merge, and conversion run from the wheel/queue paths without a dedicated control surface. See [UI structure](UI_STRUCTURE.md). The proposal sections below remain design guidance for the full audio workbench. The capability registry remains the source of truth.
 
 The references are interaction and layout inspiration only. Santra keeps its own citrus identity and Windows/Linux desktop conventions; do not reuse third-party branding, artwork, or copy. Processing remains local and offline-first, with no upload, account, cloud service, or default telemetry.
 
@@ -69,6 +69,25 @@ The wheel shows **Compress** and **Metadata** as available-looking slices, but t
 
 The supplied references do **not** show audio split, merge, speed, extraction, codec/bitrate/sample-rate controls, detailed compression or metadata editors, batch-job behavior, or specific backend support. These must not be presented as reference-derived or implemented features. If desired later, design and approve them separately. Conversion slices establish the visible format labels only; they do not prove every input-to-output pairing is valid.
 
+## Implemented behavior
+
+Audio tools open a separate audio editor window sized independently of the workspace, mirroring the image and video tool windows. The workspace keeps an in-window fallback only when the desktop bridge cannot open a popup. The editor uses the shared reference shell: source name, duration, output format, a large waveform/playback preview, then settings.
+
+The current preview is a locally generated waveform image plus the original `<audio>` element. WaveSurfer, waveform regions, volume envelopes, and recording are not integrated yet. Do not describe the editor as a full non-linear audio workbench until those exist.
+
+Implemented editor controls:
+
+- **Normalize**: target loudness, loudness range, and true-peak limit, applied with FFmpeg `loudnorm` plus a 48 kHz `aresample`.
+- **Channels**: explicit mono/stereo output count.
+- **Trim**: start/end times for the saved copy.
+- **Visualize**: waveform color and background color for the rendered video.
+- **Compress**: quality/bitrate settings for the chosen audio output format.
+- **Metadata**: writes a clean copy with copied tags and chapters removed where FFmpeg supports it.
+
+The backend also supports audio split, merge (sequential concatenation), and format conversion. Those have no dedicated audio-editor control surface yet; merge is concatenation, not a crossfade or multi-track mix, and there is no volume, fade, mute, speed, or noise-reduction control. Silence trimming (`silenceremove`) and noise reduction (`afftdn`) are not implemented, so the editor must not offer them. Output actions appear only when the installed FFmpeg build reports the required encoder, muxer, and filters.
+
+The audio editor is local-only and non-destructive: saving writes a new collision-safe file, and closing or cancelling leaves the source untouched.
+
 ## Accessibility, output, and safety proposal
 
 - Make every wheel slice, waveform lane, playback action, handle, and setting keyboard accessible with a visible focus state and screen-reader label. Hover must never be required.
@@ -80,13 +99,13 @@ The supplied references do **not** show audio split, merge, speed, extraction, c
 
 ## Decisions needed before implementation
 
-1. Confirm the evidenced tool names and wheel grouping: Compress, Metadata, Normalize, Visualize, Trim, Channels, and Bleep.
+1. Confirm the remaining tool names and wheel grouping, especially whether **Bleep** is added; Compress, Metadata, Normalize, Visualize, Trim, and Channels are implemented.
 2. Decide whether the selected conversion slice queues immediately or first opens a compact format-options step for quality/settings.
 3. Approve Santra-specific editor proportions, color treatment, waveform contrast, and whether playback/preview controls are shared across all audio tools.
-4. Define channel downmix/upmix behavior, normalization defaults, bleep tone behavior, visualizer export options, and metadata action scope.
-5. Map approved actions to verified local backends and capabilities before exposing any wheel slice.
+4. Define channel downmix/upmix behavior, normalization defaults, any bleep tone behavior, visualizer export options, and the remaining metadata action scope.
+5. Map any additional approved actions to verified local backends and capabilities before exposing a wheel slice.
 
-Until these decisions and a separate implementation review are complete, this document is design guidance only and makes no audio feature availability claim.
+The implemented subset above is current; the unbuilt interactions remain design guidance and must not be treated as available until a separate implementation review lands.
 
 ## UI source migration (Penpot frame 03)
 

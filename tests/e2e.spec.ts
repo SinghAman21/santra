@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Bridge, ImageEditorContext, Job, Snapshot, VideoEditorContext } from '../src/common/types';
+import { fileURLToPath } from 'node:url';
+import type { AudioEditorContext, Bridge, ImageEditorContext, Job, Snapshot, VideoEditorContext } from '../src/common/types';
 
 interface MockControl {
   state: Snapshot;
@@ -12,12 +13,13 @@ interface MockControl {
   emitGlobalFiles(files: Snapshot['files'], mode: 'convert' | 'tools' | 'actions'): void;
   emitImageContext(context: ImageEditorContext): void;
   emitVideoContext(context: VideoEditorContext): void;
+  emitAudioContext(context: AudioEditorContext): void;
 }
 
 declare global { interface Window { __santraTest: MockControl } }
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/fixtures/preview.webm',route=>route.fulfill({path:new URL('./fixtures/preview.webm',import.meta.url).pathname,contentType:'video/webm'}));
+  await page.route('**/fixtures/preview.webm',route=>route.fulfill({path:fileURLToPath(new URL('./fixtures/preview.webm',import.meta.url)),contentType:'video/webm'}));
   await page.addInitScript(() => {
     const incoming: Snapshot['files'] = [
       { id: 'image', path: '/fixtures/pixel.png', name: 'pixel.png', ext: 'png', size: 120, category: 'image' },
@@ -52,7 +54,12 @@ test.beforeEach(async ({ page }) => {
         { id: 'video:split', operation: 'split', label: 'Split video', category: 'video', inputs: ['mp4'], outputs: ['mp4'], backend: 'ffmpeg', available: true, batch: true, preservesMetadata: true },
         { id: 'video:merge', operation: 'merge', label: 'Merge video', category: 'video', inputs: ['mp4'], outputs: ['mp4'], backend: 'ffmpeg', available: true, batch: true, preservesMetadata: true },
         { id: 'video:redact', operation: 'redact', label: 'Redact video', category: 'video', inputs: ['mp4'], outputs: ['mp4'], backend: 'ffmpeg', available: true, batch: true, preservesMetadata: false },
+        { id: 'video:crop-resize', operation: 'crop-resize', label: 'Crop & resize video', category: 'video', inputs: ['mp4'], outputs: ['mp4'], backend: 'ffmpeg', available: true, batch: true, preservesMetadata: false },
+        { id: 'video:rotate-flip', operation: 'rotate-flip', label: 'Rotate & flip video', category: 'video', inputs: ['mp4'], outputs: ['mp4'], backend: 'ffmpeg', available: true, batch: true, preservesMetadata: false },
+        { id: 'video:frames-gif', operation: 'frames-gif', label: 'Frames & GIF', category: 'video', inputs: ['mp4'], outputs: ['png', 'gif'], backend: 'ffmpeg', available: true, batch: true, preservesMetadata: false },
+        { id: 'video:audio-output', operation: 'audio-output', label: 'Mute & extract audio', category: 'video', inputs: ['mp4'], outputs: ['mp4', 'wav'], backend: 'ffmpeg', available: true, batch: true, preservesMetadata: false },
         { id: 'audio:visualize', operation: 'visualize', label: 'Audio wave visualizer', category: 'audio', inputs: ['wav'], outputs: ['mp4'], backend: 'ffmpeg', available: true, batch: true, preservesMetadata: true },
+        { id: 'audio:normalize', operation: 'normalize', label: 'Normalize audio', category: 'audio', inputs: ['wav'], outputs: ['wav'], backend: 'ffmpeg', available: true, batch: true, preservesMetadata: true },
         { id: 'archive:create', operation: 'create-archive', label: 'Create archive', category: 'archive', inputs: ['*'], outputs: ['zip'], backend: 'rust-archive', available: true, batch: false, preservesMetadata: false },
         { id: 'pdf:render', operation: 'render', label: 'Render PDF pages', category: 'pdf', inputs: ['pdf'], outputs: ['png', 'jpg'], backend: 'poppler', available: true, batch: true, preservesMetadata: false, options: { page: { min: 1, max: 100000 }, dpi: { min: 36, max: 600, default: 300 } } },
         { id: 'office:convert', label: 'Unavailable office conversion', category: 'document', inputs: ['png'], outputs: ['pdf'], backend: 'libreoffice', available: false, batch: true, preservesMetadata: false },
@@ -63,8 +70,10 @@ test.beforeEach(async ({ page }) => {
     const globalFilesListeners = new Set<(request: { files: Snapshot['files']; mode: 'convert' | 'tools' | 'actions' }) => void>();
     const imageContextListeners = new Set<(context: ImageEditorContext) => void>();
     const videoContextListeners = new Set<(context: VideoEditorContext) => void>();
+    const audioContextListeners = new Set<(context: AudioEditorContext) => void>();
     let imageContext: ImageEditorContext | null = null;
     let videoContext: VideoEditorContext | null = null;
+    let audioContext: AudioEditorContext | null = null;
     const calls: MockControl['calls'] = [];
     const emit = (update: Partial<Snapshot>) => {
       Object.assign(state, structuredClone(update));
@@ -116,6 +125,14 @@ test.beforeEach(async ({ page }) => {
       onVideoToolContext: callback => { videoContextListeners.add(callback); return () => { videoContextListeners.delete(callback); }; },
       applyVideoTool: async request => { record('applyVideoTool', request); return { queued: true }; },
       closeVideoTool: async () => { record('closeVideoTool', null); },
+      openAudioTool: async request => { record('openAudioTool', request); return { opened: true }; },
+      audioToolContext: async () => {
+        if (new URLSearchParams(location.search).has('late-context')) { if (!audioContext) throw new Error('Audio editor is no longer available'); return structuredClone(audioContext); }
+        return { capability: structuredClone(state.capabilities.find(capability => capability.id === 'audio:normalize')!), files: structuredClone(incoming.filter(file => file.category === 'audio')), format: 'wav', options: { loudness: '-16' } };
+      },
+      onAudioToolContext: callback => { audioContextListeners.add(callback); return () => { audioContextListeners.delete(callback); }; },
+      applyAudioTool: async request => { record('applyAudioTool', request); return []; },
+      closeAudioTool: async () => { record('closeAudioTool', null); },
       onWheelMode: callback => { wheelModeListeners.add(callback); return () => { wheelModeListeners.delete(callback); }; },
       onNativeDragEnter: callback => { nativeDragEnterListeners.add(callback); return ()=>{nativeDragEnterListeners.delete(callback)}; },
       onNativeDragOver: callback => { nativeDragOverListeners.add(callback); return () => { nativeDragOverListeners.delete(callback); }; },
@@ -123,7 +140,7 @@ test.beforeEach(async ({ page }) => {
       onGlobalFiles: callback => { globalFilesListeners.add(callback); return () => { globalFilesListeners.delete(callback); }; },
       onUpdate: callback => { listeners.add(callback); return () => { listeners.delete(callback); }; },
     };
-    window.__santraTest = { state, calls, emit, emitWheelMode: (mode, newDrag) => { for (const listener of wheelModeListeners) listener(mode, newDrag); }, emitNativeDragEnter: files => { for(const listener of nativeDragEnterListeners) listener(structuredClone(files)); }, emitNativeDragOver: position => { for (const listener of nativeDragOverListeners) listener(position); }, emitNativeDrop: (files, position) => { for (const listener of nativeDropListeners) listener(files, position); }, emitGlobalFiles: (files, mode) => { for (const listener of globalFilesListeners) listener({ files, mode }); }, emitImageContext: context => { imageContext = structuredClone(context); for (const listener of imageContextListeners) listener(structuredClone(context)); }, emitVideoContext: context => { videoContext = structuredClone(context); for (const listener of videoContextListeners) listener(structuredClone(context)); } };
+    window.__santraTest = { state, calls, emit, emitWheelMode: (mode, newDrag) => { for (const listener of wheelModeListeners) listener(mode, newDrag); }, emitNativeDragEnter: files => { for(const listener of nativeDragEnterListeners) listener(structuredClone(files)); }, emitNativeDragOver: position => { for (const listener of nativeDragOverListeners) listener(position); }, emitNativeDrop: (files, position) => { for (const listener of nativeDropListeners) listener(files, position); }, emitGlobalFiles: (files, mode) => { for (const listener of globalFilesListeners) listener({ files, mode }); }, emitImageContext: context => { imageContext = structuredClone(context); for (const listener of imageContextListeners) listener(structuredClone(context)); }, emitVideoContext: context => { videoContext = structuredClone(context); for (const listener of videoContextListeners) listener(structuredClone(context)); }, emitAudioContext: context => { audioContext = structuredClone(context); for (const listener of audioContextListeners) listener(structuredClone(context)); } };
     Object.defineProperty(window, 'santra', { configurable: true, value: api });
   });
 });
@@ -274,6 +291,12 @@ test('citrus wheel persists after modifier release and dropping a slice queues i
     await app.dispatchEvent('dragover', { dataTransfer: transfer, clientX: 710, clientY: 420, shiftKey: false });
     const wheel = page.getByRole('menu', { name: 'Convert', exact: true });
     await expect(wheel).toBeVisible();
+    // The workspace drag shell must not wash the app in a white blur panel;
+    // only the floating wheel paints.
+    expect(await page.locator('.drag-overlay').evaluate(element => {
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, blur: style.backdropFilter, border: style.borderTopWidth };
+    })).toEqual({ background: 'rgba(0, 0, 0, 0)', blur: 'none', border: '0px' });
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('citrus-wheel.png') });
     const jpg = wheel.getByRole('menuitem', { name: /^JPG/ });
     await jpg.dispatchEvent('dragenter', { dataTransfer: transfer });
@@ -416,6 +439,29 @@ test('global image tools wheel shows image tools and hides generic archive creat
   } finally { await transfer.dispose(); }
 });
 
+test('global wheel overlay paints only the ring, never a card or blur', async ({ page }) => {
+  await page.goto('/?santra-wheel=1&mode=convert');
+  const paint = await page.evaluate(() => {
+    const read = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const style = getComputedStyle(element);
+      return {
+        background: style.backgroundColor,
+        image: style.backgroundImage,
+        blur: style.backdropFilter,
+        shadow: style.boxShadow,
+        border: style.borderTopWidth,
+      };
+    };
+    return { body: read('body'), shell: read('.global-wheel-shell'), card: read('.global-wheel-card') };
+  });
+  const flat = { background: 'rgba(0, 0, 0, 0)', image: 'none', blur: 'none', shadow: 'none', border: '0px' };
+  expect(paint.body).toEqual(flat);
+  expect(paint.shell).toEqual(flat);
+  expect(paint.card).toEqual(flat);
+});
+
 test('global video tools wheel shows supported video operations and dispatches the selected tool', async ({ page }) => {
   await page.goto('/?santra-wheel=1&mode=tools');
   const transfer = await page.evaluateHandle(() => {
@@ -431,6 +477,12 @@ test('global video tools wheel shows supported video operations and dispatches t
     const trim = wheel.getByRole('menuitem', { name: /^Trim/ });
     await expect(trim.locator('svg')).toBeVisible();
     await expect(wheel.getByRole('menuitem', { name: /^Redact/ })).toBeVisible();
+    await expect(wheel.getByRole('menuitem', { name: /^Crop & resize/ })).toBeVisible();
+    await expect(wheel.getByRole('menuitem', { name: /^Rotate & flip/ })).toBeVisible();
+    await expect(wheel.getByRole('menuitem', { name: /^Frames & GIF/ })).toBeVisible();
+    await expect(wheel.getByRole('menuitem', { name: /^Mute & extract audio/ })).toBeVisible();
+    await expect(wheel.getByRole('menuitem', { name: /^Snapshot/ })).toHaveCount(0);
+    await expect(wheel.getByRole('menuitem', { name: /^Extract audio/ })).toHaveCount(0);
     await expect(wheel.getByRole('menuitem', { name: /^Edit photo/ })).toHaveCount(0);
     await expect(wheel.getByRole('menuitem', { name: /^Merge/ })).toHaveCount(0);
     await trim.dispatchEvent('dragenter', { dataTransfer: transfer });
@@ -669,23 +721,31 @@ test('preview navigation makes no external network requests', async ({ page, bas
   expect(external).toEqual([]);
 });
 
-test('audio normalization opens its own editor and queues only compatible files', async ({ page }, testInfo) => {
+test('audio tools open their own editor window and queue only compatible files', async ({ page }) => {
   await page.goto('/');
   await addFiles(page);
-  await page.evaluate(() => window.__santraTest.emit({ capabilities: [...window.__santraTest.state.capabilities, { id:'audio:normalize', operation:'normalize', label:'Normalize audio', category:'audio', inputs:['wav'], outputs:['wav'], backend:'ffmpeg', available:true, batch:true, preservesMetadata:true }] }));
   await page.getByRole('button', { name:'Choose an operation' }).click();
   await page.getByRole('tab', { name:/^Tools/ }).click();
   await page.getByRole('button', { name:/^Normalize audio/ }).click();
-  const editor=page.getByRole('dialog', { name:'Normalize audio', exact:true });
+  await expect.poll(() => page.evaluate(() => window.__santraTest.calls.find(call => call.method === 'openAudioTool')?.value)).toMatchObject({
+    capabilityId: 'audio:normalize', files: ['/fixtures/tone.wav'], format: 'wav',
+  });
+  await expect(page.getByRole('dialog', { name:'Normalize audio', exact:true })).toHaveCount(0);
+  expect(await page.evaluate(() => window.__santraTest.calls.filter(call => call.method === 'enqueue'))).toHaveLength(0);
+});
+
+test('audio editor window renders the waveform and sends the saved recipe', async ({ page }, testInfo) => {
+  await page.goto('/?santra-audio-tool=1');
+  const editor = page.getByRole('dialog', { name:'Normalize audio', exact:true });
   await expect(editor).toBeVisible();
+  await expect(editor.getByRole('img', { name:/Waveform/ })).toBeVisible();
   await editor.getByRole('spinbutton', { name:'Target loudness (LUFS)' }).fill('-18');
   await expect(editor.getByRole('spinbutton', { name:'True peak (dBTP)' })).toHaveValue('-1.5');
   await page.screenshot({ animations: 'disabled', path:testInfo.outputPath('03-audio-normalize.png') });
   await editor.getByRole('button', { name:'Save new copy' }).click();
-  await expect(editor).toHaveCount(0);
-  const call=await page.evaluate(()=>window.__santraTest.calls.find(c=>c.method==='enqueue')?.value as {files:Snapshot['files'];options:Record<string,unknown>});
-  expect(call.files.map(f=>f.category)).toEqual(['audio']);
-  expect(call.options.loudness).toBe('-18');
+  await expect.poll(() => page.evaluate(() => window.__santraTest.calls.find(call => call.method === 'applyAudioTool')?.value)).toMatchObject({
+    format: 'wav', options: { loudness: '-18' },
+  });
 });
 
 test('document conversion review preserves its warning and recovers from a queue error', async ({ page }, testInfo) => {
@@ -834,11 +894,13 @@ test('MKV filename hints work with generic MIME and replace a previous image dra
 test('remaining video editors fit the reference surface with playable local previews',async({page},testInfo)=>{
  await page.setViewportSize({width:824,height:584});
  await page.goto('/?santra-video-tool=1');
- for(const operation of ['compress','trim','split','crop','resize','rotate','flip','speed','snapshot','mute','redact','strip-metadata','merge','gif','extract-audio']){
-  await page.evaluate(operation=>{
+ for(const operation of ['compress','trim','split','merge','crop-resize','rotate-flip','speed','frames-gif','audio-output','redact','strip-metadata']){
+  const format=operation==='frames-gif'?'png':'mp4';
+  const outputs=operation==='frames-gif'?['png','gif']:operation==='audio-output'?['mp4','wav']:['mp4'];
+  await page.evaluate(({operation,format,outputs})=>{
     const file:Snapshot['files'][number]={id:'video',name:'clip.mp4',path:'/fixtures/clip.mp4',size:4000,ext:'mp4',category:'video'};
-    window.__santraTest.emitVideoContext({id:operation,capability:{id:`video:${operation}`,operation,label:operation,category:'video',inputs:['mp4'],outputs:[operation==='gif'?'gif':operation==='snapshot'?'png':operation==='extract-audio'?'wav':'mp4'],backend:'ffmpeg',available:true,batch:operation!=='merge',preservesMetadata:true},files:operation==='merge'?[file,{...file,id:'video-2',name:'clip-2.mp4',path:'/fixtures/clip-2.mp4'}]:[file],format:operation==='gif'?'gif':operation==='snapshot'?'png':operation==='extract-audio'?'wav':'mp4',options:{start:'0',end:'3',quality:'75'}});
-  },operation);
+    window.__santraTest.emitVideoContext({id:operation,capability:{id:`video:${operation}`,operation,label:operation,category:'video',inputs:['mp4'],outputs,backend:'ffmpeg',available:true,batch:operation!=='merge',preservesMetadata:true},files:operation==='merge'?[file,{...file,id:'video-2',name:'clip-2.mp4',path:'/fixtures/clip-2.mp4'}]:[file],format,options:{start:'0',end:'3',quality:'75'}});
+  },{operation,format,outputs});
   const editor=page.getByRole('dialog');
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('button',{name:'Save new copy'})).toBeInViewport();
@@ -848,10 +910,10 @@ test('remaining video editors fit the reference surface with playable local prev
  }
 });
 
-test('audio, archive, EPUB and subtitle reviews use the compact reference shell',async({page},testInfo)=>{
+test('archive, EPUB and subtitle reviews use the compact reference shell',async({page},testInfo)=>{
  await page.setViewportSize({width:900,height:700});
  await page.goto('/');
- const cases=[['03','audio','wav','normalize','flac'],['03','audio','wav','trim','wav'],['03','audio','wav','channels','wav'],['03','audio','wav','visualize','mp4'],['03','audio','wav','compress','mp3'],['03','audio','wav','strip-metadata','wav'],['05','archive','zip','extract','directory'],['05','archive','zip','create-archive','tar'],['06','document','docx','convert','md'],['07','document','epub','convert','docx'],['10','subtitle','srt','convert','vtt']] as const;
+ const cases=[['05','archive','zip','extract','directory'],['05','archive','zip','create-archive','tar'],['06','document','docx','convert','md'],['07','document','epub','convert','docx'],['10','subtitle','srt','convert','vtt']] as const;
  for(const [frame,category,ext,operation,format] of cases){
   const label=`${operation} ${ext}`;
   await page.evaluate(({category,ext,operation,format,label})=>{
@@ -863,8 +925,32 @@ test('audio, archive, EPUB and subtitle reviews use the compact reference shell'
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('button',{name:'Save new copy'})).toBeInViewport();
   const box=await editor.boundingBox();expect(box!.width).toBe(800);expect(box!.height).toBe(560);
-  if(category==='audio')await expect(editor.getByRole('img',{name:/Waveform/})).toBeVisible();
   await editor.screenshot({animations:'disabled',path:testInfo.outputPath(`${frame}-${ext}-${operation}.png`)});
+  await editor.getByRole('button',{name:'Cancel',exact:true}).click();
+ }
+});
+
+test('audio editor windows cover every supported audio operation',async({page},testInfo)=>{
+ await page.setViewportSize({width:900,height:700});
+ await page.goto('/?santra-audio-tool=1&late-context=1');
+ await expect(page.getByText('Preparing local audio preview…')).toBeVisible();
+ const cases=[['normalize','wav'],['trim','wav'],['channels','wav'],['visualize','mp4'],['compress','mp3'],['strip-metadata','wav']] as const;
+ for(const [operation,format] of cases){
+  const label=`${operation} wav`;
+  await page.evaluate(({operation,format,label})=>{
+   window.__santraTest.emitAudioContext({
+    id:operation,
+    capability:{id:`audio:${operation}`,operation,label,category:'audio',inputs:['wav'],outputs:[format],backend:'ffmpeg',available:true,batch:true,preservesMetadata:false},
+    files:[{id:'audio',path:'/fixtures/tone.wav',name:'tone.wav',ext:'wav',size:2048,category:'audio'}],
+    format,options:{},
+   });
+  },{operation,format,label});
+  const editor=page.getByRole('dialog',{name:label,exact:true});
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('button',{name:'Save new copy'})).toBeInViewport();
+  await expect(editor.getByRole('img',{name:/Waveform/})).toBeVisible();
+  const box=await editor.boundingBox();expect(box!.width).toBeLessThanOrEqual(900);expect(box!.height).toBeLessThanOrEqual(700);
+  await editor.screenshot({animations:'disabled',path:testInfo.outputPath(`03-audio-${operation}.png`)});
   await editor.getByRole('button',{name:'Cancel',exact:true}).click();
  }
 });

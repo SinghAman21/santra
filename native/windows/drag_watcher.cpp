@@ -1,4 +1,5 @@
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
 
 #include <algorithm>
@@ -16,8 +17,10 @@
 
 namespace {
 
-constexpr UINT WatcherEventMessage = WM_APP + 0x51;
 constexpr ULONGLONG DoubleTapWindowMs = 400;
+// Poll interval. Fast enough that a normal 60-100 ms modifier tap is never
+// missed, slow enough to be invisible in CPU usage.
+constexpr DWORD PollIntervalMs = 8;
 
 enum Modifier : unsigned int {
     Shift = 1u << 0,
@@ -162,14 +165,8 @@ struct Config {
     std::string controlShiftMode = "none";
 };
 
-HHOOK mouseHook = nullptr;
-HHOOK keyboardHook = nullptr;
-DWORD hookThreadId = 0;
-unsigned int modifiersDown = 0;
-std::array<bool, 256> downKeys{};
-bool leftButtonDown = false;
+DWORD watcherThreadId = 0;
 Config config;
-DragState* dragState = nullptr;
 
 void emit(const Event& event) {
     std::printf("{\"type\":\"%s\",\"mode\":\"%s\",\"x\":%d,\"y\":%d}\n",
@@ -177,97 +174,81 @@ void emit(const Event& event) {
     std::fflush(stdout);
 }
 
+// Events are written from the polling thread itself, so no hook callback is
+// ever delayed by stdout backpressure.
 void emitAll(const std::vector<Event>& events) {
-    for (const auto& event : events) {
-        auto* queued = new (std::nothrow) Event(event);
-        if (queued == nullptr ||
-            !PostThreadMessageW(hookThreadId, WatcherEventMessage, 0,
-                                reinterpret_cast<LPARAM>(queued))) {
-            delete queued;
-        }
-    }
+    for (const auto& event : events) emit(event);
 }
 
-unsigned int modifierForKey(DWORD key) {
-    switch (key) {
-        case VK_SHIFT:
-        case VK_LSHIFT:
-        case VK_RSHIFT:
-            return Shift;
-        case VK_MENU:
-        case VK_LMENU:
-        case VK_RMENU:
-            return Alt;
-        case VK_CONTROL:
-        case VK_LCONTROL:
-        case VK_RCONTROL:
-            return Control;
-        default:
-            return 0;
-    }
-}
-
-unsigned int currentModifiers() {
+unsigned int polledModifiers() {
     unsigned int result = 0;
-    for (std::size_t key = 0; key < downKeys.size(); ++key) {
-        if (downKeys[key]) result |= modifierForKey(static_cast<DWORD>(key));
-    }
+    if ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) result |= Shift;
+    if ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) result |= Alt;
+    if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) result |= Control;
     return result;
 }
 
-LRESULT CALLBACK mouseProc(int code, WPARAM message, LPARAM data) {
-    if (code == HC_ACTION && dragState != nullptr) {
-        const auto* info = reinterpret_cast<const MSLLHOOKSTRUCT*>(data);
-        if ((info->flags & LLMHF_INJECTED) == 0) {
-            const int x = info->pt.x;
-            const int y = info->pt.y;
-            if (message == WM_LBUTTONDOWN) {
-                leftButtonDown = true;
-                dragState->begin(x, y, modifiersDown);
-            } else if (message == WM_MOUSEMOVE && leftButtonDown) {
-                emitAll(dragState->move(x, y, modifiersDown));
-            } else if (message == WM_LBUTTONUP && leftButtonDown) {
-                emitAll(dragState->release(x, y));
-                leftButtonDown = false;
-            }
-        }
-    }
-    return CallNextHookEx(mouseHook, code, message, data);
-}
+// Passive polling instead of global low-level hooks. WH_MOUSE_LL and
+// WH_KEYBOARD_LL callbacks run inside every mouse and keyboard event on the
+// desktop; that adds latency to precision-touchpad gestures, can drop taps on
+// loaded machines, and is a lot of surface area for a drag gesture.
+class InputPoller {
+public:
+    explicit InputPoller(DragState& state)
+        : state_(state), modifiers_(polledModifiers()),
+          leftDown_((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0) {}
 
-LRESULT CALLBACK keyboardProc(int code, WPARAM message, LPARAM data) {
-    if (code == HC_ACTION && dragState != nullptr &&
-        (message == WM_KEYDOWN || message == WM_SYSKEYDOWN ||
-         message == WM_KEYUP || message == WM_SYSKEYUP)) {
-        const auto* info = reinterpret_cast<const KBDLLHOOKSTRUCT*>(data);
-        if ((info->flags & LLKHF_INJECTED) == 0) {
-            if (info->vkCode < downKeys.size() && modifierForKey(info->vkCode) != 0) {
-                const bool pressed = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
-                const bool wasPressed = downKeys[info->vkCode];
-                if (pressed == wasPressed) return CallNextHookEx(keyboardHook, code, message, data);
-                downKeys[info->vkCode] = pressed;
-                modifiersDown = currentModifiers();
-                if (leftButtonDown) {
-                    const auto key = modifierForKey(info->vkCode);
-                    const auto tick = GetTickCount64();
-                    if (pressed) {
-                        POINT cursor{};
-                        if (GetCursorPos(&cursor))
-                            emitAll(dragState->modifierDown(cursor.x, cursor.y, key, modifiersDown, tick));
-                    } else {
-                        dragState->modifierUp(key, tick);
-                    }
-                }
+    void tick() {
+        POINT cursor{};
+        GetCursorPos(&cursor);
+        const bool leftDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+        const unsigned int modifiers = polledModifiers();
+
+        if (leftDown != leftDown_) {
+            leftDown_ = leftDown;
+            if (leftDown) {
+                state_.begin(cursor.x, cursor.y, modifiers);
+                modifiers_ = modifiers;
+            } else {
+                emitAll(state_.release(cursor.x, cursor.y));
+                modifiers_ = modifiers;
+                return;
             }
         }
+        if (leftDown) {
+            emitAll(state_.move(cursor.x, cursor.y, modifiers));
+            applyModifierEdges(cursor, modifiers);
+        } else {
+            modifiers_ = modifiers;
+        }
     }
-    return CallNextHookEx(keyboardHook, code, message, data);
-}
+
+private:
+    void applyModifierEdges(const POINT& cursor, unsigned int modifiers) {
+        constexpr unsigned int keys[] = {Shift, Alt, Control};
+        const ULONGLONG tick = GetTickCount64();
+        for (const unsigned int key : keys) {
+            const bool down = (modifiers & key) != 0;
+            const bool wasDown = (modifiers_ & key) != 0;
+            if (down == wasDown) continue;
+            if (down) {
+                emitAll(state_.modifierDown(cursor.x, cursor.y, key, modifiers, tick));
+            } else {
+                state_.modifierUp(key, tick);
+            }
+        }
+        modifiers_ = modifiers;
+    }
+
+    DragState& state_;
+    unsigned int modifiers_;
+    bool leftDown_;
+};
 
 BOOL WINAPI consoleHandler(DWORD signal) {
     if (signal == CTRL_C_EVENT || signal == CTRL_BREAK_EVENT ||
         signal == CTRL_CLOSE_EVENT || signal == CTRL_SHUTDOWN_EVENT) {
-        PostThreadMessageW(hookThreadId, WM_QUIT, 0, 0);
+        PostThreadMessageW(watcherThreadId, WM_QUIT, 0, 0);
         return TRUE;
     }
     return FALSE;
@@ -379,54 +360,37 @@ int main(int argc, char** argv) {
     const int dragHeight = std::max(1, GetSystemMetrics(SM_CYDRAG));
     DragState state(dragWidth, dragHeight, config.shiftMode,
                     config.altMode, config.controlMode, config.controlShiftMode);
-    dragState = &state;
-    downKeys[VK_SHIFT] = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-    downKeys[VK_MENU] = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-    downKeys[VK_CONTROL] = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-    modifiersDown = currentModifiers();
+    InputPoller poller(state);
 
+    // Create this thread's message queue so the console handler can post WM_QUIT.
     MSG initialMessage{};
     PeekMessageW(&initialMessage, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
-    hookThreadId = GetCurrentThreadId();
+    watcherThreadId = GetCurrentThreadId();
     if (!SetConsoleCtrlHandler(consoleHandler, TRUE)) {
         std::fprintf(stderr, "failed to install console cleanup handler\n");
         return 1;
     }
 
-    mouseHook = SetWindowsHookExW(WH_MOUSE_LL, mouseProc, GetModuleHandleW(nullptr), 0);
-    if (mouseHook == nullptr) {
-        std::fprintf(stderr, "failed to install low-level mouse hook (%lu)\n", GetLastError());
-        SetConsoleCtrlHandler(consoleHandler, FALSE);
-        return 1;
-    }
-    keyboardHook = SetWindowsHookExW(WH_KEYBOARD_LL, keyboardProc, GetModuleHandleW(nullptr), 0);
-    if (keyboardHook == nullptr) {
-        const DWORD error = GetLastError();
-        UnhookWindowsHookEx(mouseHook);
-        mouseHook = nullptr;
-        SetConsoleCtrlHandler(consoleHandler, FALSE);
-        std::fprintf(stderr, "failed to install low-level keyboard hook (%lu)\n", error);
-        return 1;
-    }
-
-    std::fprintf(stderr, "Santra drag watcher prototype running; Ctrl+C to stop.\n");
-    MSG message{};
-    BOOL messageResult = 0;
-    while ((messageResult = GetMessageW(&message, nullptr, 0, 0)) > 0) {
-        if (message.message == WatcherEventMessage) {
-            std::unique_ptr<Event> event(reinterpret_cast<Event*>(message.lParam));
-            if (event) emit(*event);
-            continue;
+    std::fprintf(stderr, "Santra drag watcher running (passive polling); Ctrl+C to stop.\n");
+    bool running = true;
+    while (running) {
+        MSG message{};
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+            if (message.message == WM_QUIT) {
+                running = false;
+                break;
+            }
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
         }
-        TranslateMessage(&message);
-        DispatchMessageW(&message);
+        if (!running) break;
+        poller.tick();
+        // Wait for the next input message or the poll interval, whichever
+        // comes first, without installing a single global hook.
+        MsgWaitForMultipleObjectsEx(0, nullptr, PollIntervalMs, QS_ALLINPUT,
+                                    MWMO_INPUTAVAILABLE);
     }
 
-    if (keyboardHook != nullptr) UnhookWindowsHookEx(keyboardHook);
-    if (mouseHook != nullptr) UnhookWindowsHookEx(mouseHook);
-    keyboardHook = nullptr;
-    mouseHook = nullptr;
-    dragState = nullptr;
     SetConsoleCtrlHandler(consoleHandler, FALSE);
-    return messageResult == -1 ? 1 : 0;
+    return 0;
 }

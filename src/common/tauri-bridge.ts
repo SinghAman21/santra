@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { Bridge, ImageEditorContext, LocalFile, Settings, Snapshot, VideoEditorContext } from './types';
+import type { AudioEditorContext, Bridge, ImageEditorContext, LocalFile, Settings, Snapshot, VideoEditorContext } from './types';
 
 export const isTauriRuntime = isTauri();
 
@@ -44,6 +44,11 @@ export const tauriBridge: Bridge = {
   openVideoTool: request => invoke('open_video_tool', { request }),
   applyVideoTool: request => invoke('apply_video_tool', { request }),
   closeVideoTool: () => invoke('close_video_tool'),
+  audioToolContext: () => invoke('audio_tool_context'),
+  onAudioToolContext: callback => subscription<AudioEditorContext>('santra:editor-context', callback),
+  openAudioTool: request => invoke('open_audio_tool', { request }),
+  applyAudioTool: request => invoke('apply_audio_tool', { request }),
+  closeAudioTool: () => invoke('close_audio_tool'),
   finishGlobalWheel: async (page, notice) => { await invoke('finish_global_wheel', { page, notice }); },
   selectGlobalOperation: request => invoke('select_global_operation', { request }),
   handoffGlobalFiles: request => invoke('handoff_global_files', { request }),
